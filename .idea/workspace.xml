@@ -5,20 +5,21 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="a4a324bf-c04b-4881-952c-8c80f312c061" name="Changes" comment="">
-      <change afterPath="$PROJECT_DIR$/.env.example" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/.gitignore" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/.idea/inspectionProfiles/profiles_settings.xml" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/.idea/modules.xml" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/.idea/vcs.xml" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/.idea/your_Mama_Bot.iml" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/bot.py" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/core/__init__.py" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/core/exceptions.py" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/core/logging_config.py" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/core/utils.py" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/requirements.txt" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/tests/__init__.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/core/database.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/core/postgres_pool.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/core/sql_queries.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/core/validation.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/handlers/__init__.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/handlers/common.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/handlers/setup_dialog.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/keyboards/__init__.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/keyboards/setup_kb.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/schema.sql" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/states/setup_state.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.env.example" beforeDir="false" afterPath="$PROJECT_DIR$/.env.example" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/bot.py" beforeDir="false" afterPath="$PROJECT_DIR$/bot.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/core/logging_config.py" beforeDir="false" afterPath="$PROJECT_DIR$/core/logging_config.py" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -43,25 +44,57 @@
     <option name="hideEmptyMiddlePackages" value="true" />
     <option name="showLibraryContents" value="true" />
   </component>
-  <component name="PropertiesComponent"><![CDATA[{
-  "keyToString": {
-    "ASKED_MARK_IGNORED_FILES_AS_EXCLUDED": "true",
-    "ModuleVcsDetector.initialDetectionPerformed": "true",
-    "RunOnceActivity.ShowReadmeOnStart": "true",
-    "RunOnceActivity.git.unshallow": "true",
-    "git-widget-placeholder": "main",
-    "last_opened_file_path": "C:/Users/urthe/PycharmProjects/your_Mama_Bot/core"
+  <component name="PropertiesComponent">{
+  &quot;keyToString&quot;: {
+    &quot;ASKED_MARK_IGNORED_FILES_AS_EXCLUDED&quot;: &quot;true&quot;,
+    &quot;ModuleVcsDetector.initialDetectionPerformed&quot;: &quot;true&quot;,
+    &quot;Python.bot.executor&quot;: &quot;Run&quot;,
+    &quot;RunOnceActivity.ShowReadmeOnStart&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.git.unshallow&quot;: &quot;true&quot;,
+    &quot;git-widget-placeholder&quot;: &quot;feature/aiogram-base&quot;,
+    &quot;last_opened_file_path&quot;: &quot;C:/Users/urthe/PycharmProjects/your_Mama_Bot/keyboards&quot;
   }
-}]]></component>
+}</component>
   <component name="RecentsManager">
     <key name="CopyFile.RECENT_KEYS">
+      <recent name="C:\Users\urthe\PycharmProjects\your_Mama_Bot\keyboards" />
+      <recent name="C:\Users\urthe\PycharmProjects\your_Mama_Bot" />
       <recent name="C:\Users\urthe\PycharmProjects\your_Mama_Bot\core" />
       <recent name="C:\Users\urthe\PycharmProjects\your_Mama_Bot\tests" />
-      <recent name="C:\Users\urthe\PycharmProjects\your_Mama_Bot" />
     </key>
     <key name="MoveFile.RECENT_KEYS">
+      <recent name="C:\Users\urthe\PycharmProjects\your_Mama_Bot\core" />
       <recent name="C:\Users\urthe\PycharmProjects\your_Mama_Bot" />
     </key>
+  </component>
+  <component name="RunManager">
+    <configuration name="bot" type="PythonConfigurationType" factoryName="Python" temporary="true" nameIsGenerated="true">
+      <module name="your_Mama_Bot" />
+      <option name="ENV_FILES" value="" />
+      <option name="INTERPRETER_OPTIONS" value="" />
+      <option name="PARENT_ENVS" value="true" />
+      <envs>
+        <env name="PYTHONUNBUFFERED" value="1" />
+      </envs>
+      <option name="SDK_HOME" value="" />
+      <option name="WORKING_DIRECTORY" value="$PROJECT_DIR$" />
+      <option name="IS_MODULE_SDK" value="true" />
+      <option name="ADD_CONTENT_ROOTS" value="true" />
+      <option name="ADD_SOURCE_ROOTS" value="true" />
+      <option name="SCRIPT_NAME" value="$PROJECT_DIR$/bot.py" />
+      <option name="PARAMETERS" value="" />
+      <option name="SHOW_COMMAND_LINE" value="false" />
+      <option name="EMULATE_TERMINAL" value="false" />
+      <option name="MODULE_MODE" value="false" />
+      <option name="REDIRECT_INPUT" value="false" />
+      <option name="INPUT_FILE" value="" />
+      <method v="2" />
+    </configuration>
+    <recent_temporary>
+      <list>
+        <item itemvalue="Python.bot" />
+      </list>
+    </recent_temporary>
   </component>
   <component name="SharedIndexes">
     <attachedChunks>

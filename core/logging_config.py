@@ -11,7 +11,7 @@ def setup_logging() -> None:
     log_level_name = os.getenv('LOG_LEVEL', 'INFO').upper()
     log_level = getattr(logging, log_level_name, logging.INFO)
 
-    log_file = os.getenv('LOG_FILE', 'logs/klychnik.log')
+    log_file = os.getenv('LOG_FILE', 'logs/your_mama_bot_db.log')
     log_dir = os.path.dirname(log_file)
 
     if log_dir and not os.path.exists(log_dir):
