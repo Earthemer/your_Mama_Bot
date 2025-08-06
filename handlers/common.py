@@ -1,6 +1,7 @@
 import logging
+from core.logging_config import log_error
 from aiogram import Router, F, types
-from aiogram.filters import CommandStart, Command
+from aiogram.filters import CommandStart, Command, StateFilter
 from aiogram.fsm.context import FSMContext
 from aiogram.enums import ChatType
 from core.database import AsyncDatabaseManager
@@ -12,7 +13,8 @@ logger = logging.getLogger(__name__)
 router = Router()
 
 
-@router.message(CommandStart())
+@router.message(CommandStart(), StateFilter(None))
+@log_error
 async def handle_start(message: types.Message, db: AsyncDatabaseManager):
     """Обрабатывает команду /start.
     Проверяет, есть ли конфигурация для этого чата."""
@@ -30,7 +32,10 @@ async def handle_start(message: types.Message, db: AsyncDatabaseManager):
 
     if config:
         bot_name = config.get('bot_name', 'Мама')
-        await message.answer(f"Я уже здесь и слежу за порядком. Можете звать меня {bot_name}.")
+        await message.answer(
+            f"Я уже здесь и слежу за порядком. Можете звать меня {bot_name}.\n\n"
+            f"Если хотите настроить меня заново, сначала используйте команду /clean."
+        )
     else:
         await message.answer(
             "Привет! Похоже, в этой семье еще нет мамы. Давайте это исправим!",
@@ -38,6 +43,7 @@ async def handle_start(message: types.Message, db: AsyncDatabaseManager):
         )
 
 @router.message(Command('clean'))
+@log_error
 async def handle_clean(message: types.Message, db: AsyncDatabaseManager):
     """
     Обрабатывает команду /clean для сброса настроек бота в чате.
@@ -71,6 +77,7 @@ async def handle_clean(message: types.Message, db: AsyncDatabaseManager):
 
 
 @router.callback_query(F.data == "cancel_setup")
+@log_error
 async def cancel_dialog(callback: types.CallbackQuery, state: FSMContext):
     """
     Обрабатывает нажатие на кнопку отмены.

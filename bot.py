@@ -1,44 +1,29 @@
 import asyncio
 import logging
 
+from joblib.testing import param
+
+from core import config
 from aiogram import Bot, Dispatcher
 from aiogram.fsm.storage.memory import MemoryStorage
-from dotenv import load_dotenv
-
 from core.logging_config import setup_logging
-from core.utils import get_str_env
 from core.postgres_pool import PostgresPool
 from core.database import AsyncDatabaseManager
-
 from handlers import setup_dialog as setup_handlers
 from handlers import common as common_handlers
+from handlers import interactions as interactions_handlers
+from core.llm_service import LLMManager
+from core.scheduler import setup_scheduler
 
-# --- 1. Настройка и конфигурация ---
 setup_logging()
 logger = logging.getLogger(__name__)
-load_dotenv()
-
-BOT_TOKEN = get_str_env('BOT_TOKEN', 'default')
-if BOT_TOKEN == 'default':
-    logger.critical("Токен бота (BOT_TOKEN) не найден в .env файле!")
-    exit("Токен бота не найден!")
-
-DB_USER = get_str_env("DB_USER", "postgres")
-DB_PASSWORD = get_str_env("DB_PASSWORD", "password")
-DB_HOST = get_str_env("DB_HOST", "localhost")
-DB_PORT = get_str_env("DB_PORT", "5432")
-DB_NAME = get_str_env("DB_NAME", "your_mama_bot_db")
-
-DATABASE_URL = f"postgresql://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
 
 
-# --- 2. Главная функция для запуска ---
 async def main():
     logger.info("Запуск бота...")
-
-
     storage = MemoryStorage()
-    db_pool = PostgresPool(dsn=DATABASE_URL)
+    db_pool = PostgresPool(dsn=config.DATABASE_URL, params=config.POOL_PARAMETERS)
+    llm_manager = LLMManager(api_key=config.GEMINI_API_KEY)
 
     try:
         await db_pool.create_pool()
@@ -49,18 +34,18 @@ async def main():
         return
 
     db_manager = AsyncDatabaseManager(pool=db_pool)
-
-
-    bot = Bot(token=BOT_TOKEN)
+    bot = Bot(token=config.BOT_TOKEN)
     dp = Dispatcher(storage=storage)
-
+    scheduler = setup_scheduler(db_manager)
+    scheduler.start()
 
     dp["db"] = db_manager
-
+    dp["llm"] = llm_manager
+    dp["scheduler"] = scheduler
 
     dp.include_router(common_handlers.router)
     dp.include_router(setup_handlers.router)
-
+    dp.include_router(interactions_handlers.router)
 
     await bot.delete_webhook(drop_pending_updates=True)
     await dp.start_polling(bot)

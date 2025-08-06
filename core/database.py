@@ -2,6 +2,7 @@ import logging
 from core.logging_config import log_error
 import asyncio
 import asyncpg
+from core.types import QueryMode
 from typing import Any, Literal
 from asyncpg import exceptions as error_database
 from core.postgres_pool import PostgresPool
@@ -15,9 +16,6 @@ import core.sql_queries as queries
 
 logger = logging.getLogger(__name__)
 
-QueryResult = list[dict[str, Any]]
-QueryMode = Literal['execute', 'fetch_all', 'fetch_row', 'fetch_val']
-
 
 class AsyncDatabaseManager:
     """
@@ -30,12 +28,10 @@ class AsyncDatabaseManager:
         logger.info(f"AsyncDatabaseManager инициализирован.")
 
     @staticmethod
-    @log_error
     def _record_to_dict(record: asyncpg.Record | None) -> dict[str, Any] | None:
         return dict(record) if record else None
 
     @staticmethod
-    @log_error
     def _records_to_list_records(records: list[asyncpg.Record]) -> list[dict[str, Any]]:
         return [dict(record) for record in records]
 
@@ -93,24 +89,43 @@ class AsyncDatabaseManager:
         except Exception as e:
             raise UnexpectedError(f"Не предвидимая ошибка: {type(e).__name__}: {e}") from e
 
-    @log_error
     async def upsert_mama_config(
             self,
             chat_id: int,
             bot_name: str,
-            child_user_id: int,
-            child_first_name: str,
-            gender: str
-    ) -> None:
+            admin_id: int,
+            timezone: str,
+            personality_prompt: str = None
+    ) -> int:
         """Создает или обновляет конфигурацию для бота в конкретном чате."""
-        await self._execute(
+        config_id = await self._execute(
             queries.UPSERT_MAMA_CONFIG,
-            params=(chat_id, bot_name, child_user_id, child_first_name, gender),
-            mode='execute'
+            params=(chat_id, bot_name, admin_id, timezone, personality_prompt),
+            mode='fetch_val'
         )
         logger.info(f"Конфигурация для чата {chat_id} успешно сохранена/обновлена.")
+        return config_id
 
-    @log_error
+    async def add_participant(
+            self,
+            config_id: int,
+            user_id: int,
+            role: str,
+            custom_name: str,
+            gender: str
+    ) -> int:
+        """Добавляет пользователя в память бота, и возвращает его уникальный ID."""
+        participant_id = await self._execute(
+            queries.INSERT_PARTICIPANT,
+            params=(config_id, user_id, role, custom_name, gender),
+            mode='fetch_val'
+        )
+        logger.info(
+            f"Для мамы с ID {config_id} добавлен участник {user_id} "
+            f"с ролью '{role}'. Его ID в таблице: {participant_id}."
+        )
+        return participant_id
+
     async def get_mama_config(self, chat_id: int) -> dict | None:
         """Получает активную конфигурацию для бота из конкретного чата."""
         logger.debug(f"Запрос конфигурации для чата {chat_id}...")
@@ -126,20 +141,51 @@ class AsyncDatabaseManager:
             logger.debug(f"Активная конфигурация для чата {chat_id} не найдена.")
             return None
 
-    @log_error
+    async def get_all_active_configs(self) -> list[dict]:
+        """Получает ID всех чатов, где настроена мама."""
+        return await self._execute(queries.GET_ALL_ACTIVE_CONFIGS, mode='fetch_all')
+
     async def delete_mama_config(self, chat_id: int) -> int:
-        """Удаляем конфигурация для конкретного чата.
-        Возвращает количество удаленных строк (0 или 1).
-        """
-        deleted_rows = await self._execute(
+        """Удаляет конфигурацию для чата и возвращает количество удаленных строк."""
+        logger.info(f"Запрос на удаление конфигурации для чата {chat_id}.")
+        deleted_count = await self._execute(
             queries.DELETE_MAMA_CONFIG,
             params=(chat_id,),
             mode='execute'
         )
-        if deleted_rows > 0:
-            logger.info(f"Конфигурация для чата {chat_id} удалена.")
+        if deleted_count > 0:
+            logger.info(f"Конфигурация для чата {chat_id} успешно удалена.")
         else:
-            logger.warning(f"Попытка удаления конфигурации для чата {chat_id}, но она не найдена.")
-        return deleted_rows
+            logger.warning(f"Попытка удаления конфигурации для несуществующего чата {chat_id}.")
+        return deleted_count
 
+    async def get_participant(self, config_id: int, user_id: int) -> dict | None:
+        """Получает полную информацию об участнике по его Telegram ID."""
+        return await self._execute(queries.GET_PARTICIPANT_BY_USER_ID, params=(config_id, user_id), mode='fetch_row')
 
+    async def get_child_participant(self, config_id: int) -> dict | None:
+        """Получается ID и имя ребенка для текущей мамы."""
+        return await self._execute(queries.GET_CHILD_PARTICIPANT, params=(config_id,), mode='fetch_row')
+
+    async def update_relationship_scope(self, participant_id: int, score_change: int):
+        """Обновляет только репутацию участника."""
+        await self._execute(queries.UPDATE_RELATIONSHIP_SCORE, params=(score_change, participant_id), mode='execute')
+
+    async def add_daily_event(self, participant_id: int, event_type: str):
+        """Добавляет дневное событие (например, 'breakfast')."""
+        await self._execute(queries.INSERT_DAILY_EVENT, params=(participant_id, event_type), mode='execute')
+
+    async def check_daily_event(self, participant_id: int, event_type: str) -> bool:
+        """Проверяет, было ли сегодня определенное событие."""
+        exists = await self._execute(queries.CHECK_DAILY_EVENT, params=(participant_id, event_type), mode='fetch_val')
+        return exists or False
+
+    async def update_personality_prompt(self, config_id: int, prompt: str):
+        await self._execute(queries.UPDATE_PERSONALITY_PROMPT, params=(prompt, config_id), mode='execute')
+
+    async def delete_all_daily_events(self) -> int:
+        """Очищает таблицу daily_events полностью (новый день)."""
+        return await self._execute(
+            queries.DELETE_ALL_DAILY_EVENTS,
+            mode='execute'
+        )

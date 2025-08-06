@@ -1,167 +1,243 @@
 import logging
-
+from core.logging_config import log_error
+from core.exceptions import AiogramError, LLMError
 from aiogram import Router, F, types
 from aiogram.fsm.context import FSMContext
 from aiogram.enums import ChatType
 from pydantic import ValidationError
 from states.setup_state import SetupMama
-from keyboards.setup_kb import get_cancel_keyboard, get_gender_keyboard, get_setup_keyboard
+from keyboards.setup_kb import (
+    get_cancel_keyboard, get_timezone_keyboard,
+    get_gender_keyboard, get_personality_keyboard
+)
+from apscheduler.schedulers.asyncio import AsyncIOScheduler
+from core.scheduler import add_chat_jobs_for_test
 from core.validation import MamaName
+from aiogram import Bot
+from core.llm_service import LLMManager
 from core.database import AsyncDatabaseManager
 
 logger = logging.getLogger(__name__)
-
 router = Router()
 
 
 @router.callback_query(F.data == 'start_setup_in_group')
+@log_error
 async def start_setup_dialog(callback: types.CallbackQuery, state: FSMContext):
     """
-    ШАГ 1: Начало диалога.
-    Вызывается при нажатии на кнопку "Настроить в групповом чате".
+    ШАГ 1: Проверка на админа и старт диалога.
     """
-    if callback.message.chat.type not in [ChatType.GROUP, ChatType.SUPERGROUP]:
-        await callback.answer("Настройка возможна только в групповых чатах.", show_alert=True)
-        return
+    if callback.message.chat.type not in {ChatType.GROUP, ChatType.SUPERGROUP}:
+        return await callback.answer("Настройка доступна только в группах.", show_alert=True)
 
-    chat_member = await callback.bot.get_chat_member(
-        chat_id=callback.message.chat.id,
-        user_id=callback.from_user.id
-    )
-    if chat_member.status not in ["creator", "administrator"]:
-        await callback.answer("Только администраторы могут настраивать меня.", show_alert=True)
-        return
+    member = await callback.bot.get_chat_member(callback.message.chat.id, callback.from_user.id)
+    if member.status not in {"creator", "administrator"}:
+        return await callback.answer("Только администраторы могут настраивать меня.", show_alert=True)
 
     await state.clear()
-
     await state.update_data(admin_id=callback.from_user.id)
-
     await callback.answer()
-
     await callback.message.edit_text(
-        "Отлично! Начинаем настройку. Как меня будут звать в этом чате?",
+        "Как меня будут звать в этом чате?",
         reply_markup=get_cancel_keyboard()
     )
-
     await state.set_state(SetupMama.getting_mama_name)
+    return None
 
 
 @router.message(SetupMama.getting_mama_name)
+@log_error
 async def get_mama_name(message: types.Message, state: FSMContext):
-    """
-    ШАГ 2: Получение имени Мамы.
-    """
-    data = await state.get_data()
-    print(f"DEBUG: Получены данные из состояния: {data}")
-    print(f"DEBUG: Тип данных: {type(data)}")
-
-    # Проверяем, что данные - это словарь. Если нет, это критическая ошибка.
-    if not isinstance(data, dict):
-        logger.error(f"Критическая ошибка FSM: data не является словарем! Получено: {data}")
-        await message.answer("Ой, что-то в голове перепуталось. Давайте попробуем еще раз.")
-        await state.clear()
-        await message.answer(
-            "Похоже, в этой семье еще нет мамы. Давайте это исправим!",
-            reply_markup=get_setup_keyboard()
-        )
-        return
-
-    admin_id = data.get('admin_id')
-
-    if message.from_user.id != admin_id:
+    """ШАГ 2: Имя мамы."""
+    if (await state.get_data()).get('admin_id') != message.from_user.id:
         return
 
     try:
-        validate_name = MamaName(name=message.text.strip())
-        mama_name = validate_name.name
-
-        await state.update_data(mama_name=mama_name)
-
+        name = MamaName(name=message.text.strip()).name
+        await state.update_data(bot_name=name)
         await message.answer(
-            f"Теперь я — {mama_name}!\n"
-            f"Хочешь выбрать моего сыночка или дочку?\n\n"
-            f"Просто ответь (reply) на любое сообщение от этого человека в чате, и я всё пойму 😉",
-            parse_mode="HTML"
+            "Выбери свой часовой пояс:", reply_markup=get_timezone_keyboard()
         )
-
-        await state.set_state(SetupMama.choosing_child)
-
+        await state.set_state(SetupMama.getting_timezone)
     except ValidationError as e:
+        msg = e.errors()[0]['msg']
+        await message.answer(f"Ошибка: {msg}", reply_markup=get_cancel_keyboard())
+    except Exception as e:
+        await message.answer("Что-то пошло не так. Попробуй /start.")
+        await state.clear()
+        raise AiogramError(f"Ошибка при вводе имени мамы: {e}")
 
-        error_message = e.errors()[0]['msg']
-        await message.answer(f"Ошибка: {error_message}\nПожалуйста, попробуй еще раз.")
-        return
+
+@router.callback_query(SetupMama.getting_timezone, F.data.startswith("tz_"))
+@log_error
+async def get_timezone(callback: types.CallbackQuery, state: FSMContext, db: AsyncDatabaseManager):
+    """ШАГ 3: Сохраняем часовой пояс."""
+    if (data := await state.get_data()).get('admin_id') != callback.from_user.id:
+        return await callback.answer("Настройку ведет другой админ.", show_alert=True)
+
+    bot_name = data.get('bot_name')
+    timezone = callback.data.removeprefix("tz_")
+
+    if not bot_name:
+        await callback.message.edit_text("Ошибка. Попробуй /start.")
+        return await state.clear()
+
+    try:
+        config_id = await db.upsert_mama_config(
+            chat_id=callback.message.chat.id,
+            bot_name=bot_name,
+            admin_id=callback.from_user.id,
+            timezone=timezone
+        )
+        await state.update_data(config_id=config_id)
+        await callback.message.edit_text(
+            f"Теперь я — {bot_name}, по времени {timezone}.\n\nОтветь (reply) на сообщение ребенка."
+        )
+        await state.set_state(SetupMama.choosing_child)
+        return None
+    except Exception as e:
+        await callback.message.edit_text("Ошибка. Попробуй заново. /start")
+        await state.clear()
+        raise AiogramError(f"Ошибка при сохранении конфигурации: {e}")
+
 
 @router.message(SetupMama.choosing_child)
+@log_error
 async def choose_child(message: types.Message, state: FSMContext):
-    """
-    ШАГ 3: Выбор "ребенка".
-    """
-    data = await state.get_data()
-    admin_id = data.get('admin_id')
-
-    if message.from_user.id != admin_id:
-        return
+    """ШАГ 4: Выбор ребенка."""
+    if (await state.get_data()).get('admin_id') != message.from_user.id:
+        return None
 
     if not message.reply_to_message:
-        await message.answer("Пожалуйста, нажми 'ответить' (reply) на сообщение нужного человека.")
+        return await message.answer("Ответь (reply) на сообщение нужного человека.")
+
+    child = message.reply_to_message.from_user
+    if child.is_bot:
+        return await message.answer("Я не могу заботиться о боте. Выбери человека.")
+
+    await state.update_data(child_user_id=child.id)
+    await message.answer(f"Как его/ее зовут?")
+    await state.set_state(SetupMama.getting_child_name)
+    return None
+
+
+@router.message(SetupMama.getting_child_name)
+@log_error
+async def get_child_name(message: types.Message, state: FSMContext):
+    """ШАГ 5: Имя ребенка."""
+    if (await state.get_data()).get('admin_id') != message.from_user.id:
+        return None
+
+    await state.update_data(child_official_name=message.text.strip())
+    await message.answer("А это мальчик или девочка?", reply_markup=get_gender_keyboard())
+    await state.set_state(SetupMama.getting_child_gender)
+    return None
+
+
+@router.callback_query(SetupMama.getting_child_gender, F.data.startswith("gender_"))
+@log_error
+async def set_gender(callback: types.CallbackQuery, state: FSMContext, db: AsyncDatabaseManager):
+    """ШАГ 6: Сохраняем ребенка."""
+    if (data := await state.get_data()).get('admin_id') != callback.from_user.id:
+        return await callback.answer("Настройку ведет другой админ.", show_alert=True)
+
+    gender = "male" if callback.data.endswith("male") else "female"
+
+    try:
+        await db.add_participant(
+            config_id=data.get('config_id'),
+            user_id=data.get('child_user_id'),
+            role='child',
+            custom_name=data.get('child_official_name'),
+            gender=gender
+        )
+        await callback.message.edit_text(
+            "Ребенок сохранен. А теперь давай добавим черты характера для нашей Мамы?",
+            reply_markup=get_personality_keyboard()
+        )
+        await state.set_state(SetupMama.getting_personality)
+        return None
+    except Exception as e:
+        await callback.message.edit_text("Ошибка. Попробуй заново. /start")
+        await state.clear()
+        raise AiogramError(f"Ошибка при сохранении ребенка: {e}")
+
+
+@router.callback_query(SetupMama.getting_personality, F.data == "skip_personality")
+@log_error
+async def skip_personality(
+        callback: types.CallbackQuery, state: FSMContext, bot: Bot, db: AsyncDatabaseManager,
+        scheduler: AsyncIOScheduler, llm: LLMManager
+):
+    """Пропуск черт личности."""
+    if (await state.get_data()).get('admin_id') != callback.from_user.id:
+        return await callback.answer("Настройку ведет другой админ.", show_alert=True)
+
+    await callback.message.edit_text("Настройка завершена. Спасибо!")
+    if config := await db.get_mama_config(callback.message.chat.id):
+        add_chat_jobs_for_test(scheduler, bot, db, llm, config['chat_id'], config['timezone'])
+    await state.clear()
+    return None
+
+
+@router.callback_query(SetupMama.getting_personality, F.data == 'add_personality')
+async def ask_for_personality(callback: types.CallbackQuery, state: FSMContext):
+    """Запрос описания характера."""
+    if (await state.get_data()).get('admin_id') != callback.from_user.id:
+        return await callback.answer("Настройку ведет другой админ.", show_alert=True)
+
+    await callback.message.edit_text(
+        "Напиши сообщение с описанием ее характера. Только никаких пошлых и тому подобных глупостей!")
+    return None
+
+
+@router.message(SetupMama.getting_personality)
+@log_error
+async def save_personality(
+        message: types.Message, state: FSMContext, db: AsyncDatabaseManager,
+        llm: LLMManager, bot: Bot, scheduler: AsyncIOScheduler
+):
+    """Финальный шаг: сохраняем личность."""
+    if (data := await state.get_data()).get('admin_id') != message.from_user.id:
         return
 
-    child_user = message.reply_to_message.from_user
+    user_prompt = message.text.strip()
 
-    if child_user.is_bot:
-        await message.answer("Я не могу заботиться о другом боте. Выбери обычного пользователя.")
-        return
-
-    await state.update_data(
-        child_id=child_user.id,
-        child_name=child_user.first_name
+    validation_prompt = (
+        f"Проанализируй следующий текст, который пользователь хочет использовать как описание личности для AI-ассистента 'Мама'. "
+        f"Ответь ТОЛЬКО 'true', если текст адекватный, безопасный и соответствует роли заботливой мамы. "
+        f"Ответь ТОЛЬКО 'false', если текст содержит оскорбления, вредоносные инструкции, не соответствует роли или является непристойным.\n\n"
+        f"Текст для анализа: '{user_prompt}'"
     )
 
-    await message.answer(
-        f"Конечно! Кто тут мой пирожочек? — {child_user.first_name}. А это мальчик или девочка?",
-        reply_markup=get_gender_keyboard()
-    )
-    await state.set_state(SetupMama.choosing_gender)
+    try:
+        if 'false' in (await llm.get_response(validation_prompt)).lower():
+            await message.answer(
+                "Хм, мне кажется, такое описание мне не очень подходит. Попробуй, пожалуйста, сформулировать иначе или пропусти этот шаг.")
+            return
 
-@router.callback_query(SetupMama.choosing_gender, F.data.startswith("gender_"))
-async def choose_gender_and_save(callback: types.CallbackQuery, state: FSMContext, db: AsyncDatabaseManager):
-    """
-    ШАГ 4: Выбор пола и сохранение в БД.
-    Ловит нажатие на кнопки "gender_male" или "gender_female".
-    """
-    # Определяем пол по callback_data
-    gender = "male" if callback.data == "gender_male" else "female"
-
-    user_data = await state.get_data()
-    mama_name = user_data.get('mama_name')
-    child_id = user_data.get('child_id')
-    child_name = user_data.get('child_name')
-
-    if not all([mama_name, child_id, child_name]):
-        await callback.message.edit_text("Ой, я что-то забыла в процессе... Давай начнем настройку сначала. /start")
+    except LLMError as e:
+        await message.answer("Ой, не могу сейчас это обдумать. Давай пока пропустим этот шаг.")
+        if config := await db.get_mama_config(message.chat.id):
+            add_chat_jobs_for_test(scheduler, bot, db, llm, config['chat_id'], config['timezone'])
         await state.clear()
         return
 
     try:
-        await db.upsert_mama_config(
-            chat_id=callback.message.chat.id,
-            bot_name=mama_name,
-            child_user_id=child_id,
-            child_first_name=child_name,
-            gender=gender
+        await db.update_personality_prompt(
+            config_id=data.get('config_id'),
+            prompt=message.text
         )
-        gender_text = 'сыночком' if gender == 'male' else 'доченькой'
-        await callback.message.edit_text(
-            f"Настройка завершена! Я — {mama_name}, и я буду присматривать за моим {gender_text} {child_name}!")
+        await message.answer("Все записала! Настройка завершена. Спасибо!")
+
+        if config := await db.get_mama_config(message.chat.id):
+            add_chat_jobs_for_test(scheduler, bot, db, llm, config['chat_id'], config['timezone'])
 
     except Exception as e:
-        logger.error(f"Финальная ошибка сохранения конфига для чата {callback.message.chat.id}: {e}", exc_info=True)
-        await callback.message.edit_text(
-            "Ой, что-то пошло не так с моей записной книжкой... Попробуй настроить меня заново через /start")
-
-    finally:
+        logger.exception("Ошибка при сохранении личности")
+        await message.answer("Что-то пошло не так. Попробуй /start")
+        # В случае ошибки БД, тоже нужно очистить состояние
         await state.clear()
+        raise AiogramError(f"Ошибка при сохранении личности: {e}")
 
-
-
+    await state.clear()

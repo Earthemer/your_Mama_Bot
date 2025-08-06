@@ -5,21 +5,27 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="a4a324bf-c04b-4881-952c-8c80f312c061" name="Changes" comment="">
-      <change afterPath="$PROJECT_DIR$/core/database.py" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/core/postgres_pool.py" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/core/sql_queries.py" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/core/validation.py" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/handlers/__init__.py" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/handlers/common.py" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/handlers/setup_dialog.py" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/keyboards/__init__.py" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/keyboards/setup_kb.py" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/schema.sql" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/states/setup_state.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/core/config.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/core/llm_service.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/core/scheduler.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/core/types.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/handlers/interactions.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.env.example" beforeDir="false" afterPath="$PROJECT_DIR$/.env.example" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/README.md" beforeDir="false" afterPath="$PROJECT_DIR$/README.md" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/bot.py" beforeDir="false" afterPath="$PROJECT_DIR$/bot.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/core/logging_config.py" beforeDir="false" afterPath="$PROJECT_DIR$/core/logging_config.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/core/database.py" beforeDir="false" afterPath="$PROJECT_DIR$/core/database.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/core/exceptions.py" beforeDir="false" afterPath="$PROJECT_DIR$/core/exceptions.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/core/postgres_pool.py" beforeDir="false" afterPath="$PROJECT_DIR$/core/postgres_pool.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/core/sql_queries.py" beforeDir="false" afterPath="$PROJECT_DIR$/core/sql_queries.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/core/utils.py" beforeDir="false" afterPath="$PROJECT_DIR$/core/utils.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/core/validation.py" beforeDir="false" afterPath="$PROJECT_DIR$/core/validation.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/handlers/common.py" beforeDir="false" afterPath="$PROJECT_DIR$/handlers/common.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/handlers/setup_dialog.py" beforeDir="false" afterPath="$PROJECT_DIR$/handlers/setup_dialog.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/keyboards/setup_kb.py" beforeDir="false" afterPath="$PROJECT_DIR$/keyboards/setup_kb.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/requirements.txt" beforeDir="false" afterPath="$PROJECT_DIR$/requirements.txt" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/schema.sql" beforeDir="false" afterPath="$PROJECT_DIR$/schema.sql" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/states/setup_state.py" beforeDir="false" afterPath="$PROJECT_DIR$/states/setup_state.py" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -49,16 +55,17 @@
     &quot;ASKED_MARK_IGNORED_FILES_AS_EXCLUDED&quot;: &quot;true&quot;,
     &quot;ModuleVcsDetector.initialDetectionPerformed&quot;: &quot;true&quot;,
     &quot;Python.bot.executor&quot;: &quot;Run&quot;,
+    &quot;Python.testcode.executor&quot;: &quot;Run&quot;,
     &quot;RunOnceActivity.ShowReadmeOnStart&quot;: &quot;true&quot;,
     &quot;RunOnceActivity.git.unshallow&quot;: &quot;true&quot;,
     &quot;git-widget-placeholder&quot;: &quot;feature/aiogram-base&quot;,
-    &quot;last_opened_file_path&quot;: &quot;C:/Users/urthe/PycharmProjects/your_Mama_Bot/keyboards&quot;
+    &quot;last_opened_file_path&quot;: &quot;C:/Users/urthe/PycharmProjects/your_Mama_Bot&quot;
   }
 }</component>
   <component name="RecentsManager">
     <key name="CopyFile.RECENT_KEYS">
-      <recent name="C:\Users\urthe\PycharmProjects\your_Mama_Bot\keyboards" />
       <recent name="C:\Users\urthe\PycharmProjects\your_Mama_Bot" />
+      <recent name="C:\Users\urthe\PycharmProjects\your_Mama_Bot\keyboards" />
       <recent name="C:\Users\urthe\PycharmProjects\your_Mama_Bot\core" />
       <recent name="C:\Users\urthe\PycharmProjects\your_Mama_Bot\tests" />
     </key>
@@ -112,5 +119,16 @@
       <updated>1751480122702</updated>
     </task>
     <servers />
+  </component>
+  <component name="Vcs.Log.Tabs.Properties">
+    <option name="TAB_STATES">
+      <map>
+        <entry key="MAIN">
+          <value>
+            <State />
+          </value>
+        </entry>
+      </map>
+    </option>
   </component>
 </project>

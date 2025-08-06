@@ -35,3 +35,15 @@ class PoolConnectionError(CustomError):
 
 class UnexpectedError(CustomError):
     """Непредвидимая ошибка"""
+
+class LLMError(CustomError):
+    """Ошибка при работе с LLM."""
+    pass
+
+class AiogramError(CustomError):
+    """Ошибка при работе с aiogram."""
+    pass
+
+class SchedulerError(CustomError):
+    """Ошибка при работе с AsyncIOScheduler."""
+    pass
