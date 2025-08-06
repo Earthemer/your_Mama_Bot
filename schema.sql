@@ -13,8 +13,7 @@ CREATE TABLE IF NOT EXISTS mama_configs (
     created_at          TIMESTAMPTZ DEFAULT (now() at time zone 'utc'),
     updated_at          TIMESTAMPTZ DEFAULT (now() at time zone 'utc')
 );
--- Таблица 2: Участники "семьи" (Максимально упрощена)
--- Хранит только ДОЛГОСРОЧНОЕ состояние.
+-- Таблица 2: Участники "семьи"
 CREATE TABLE IF NOT EXISTS participants (
     id                      SERIAL PRIMARY KEY,
     config_id               INTEGER NOT NULL REFERENCES mama_configs(id) ON DELETE CASCADE,
@@ -28,7 +27,6 @@ CREATE TABLE IF NOT EXISTS participants (
     updated_at              TIMESTAMPTZ DEFAULT (now() at time zone 'utc')
 );
 -- Таблица 3: Журнал дневных событий
--- "Краткосрочная память" мамы. Хранит ВСЕ одноразовые действия за день.
 CREATE TABLE IF NOT EXISTS daily_events (
     id             SERIAL PRIMARY KEY,
     participant_id INTEGER NOT NULL REFERENCES participants(id) ON DELETE CASCADE,
@@ -44,7 +42,7 @@ CREATE TABLE IF NOT EXISTS canned_responses (
 );
 
 
--- Таблица 4: Журнал дневных событий (Остается, важен для сценариев)
+-- Таблица 4: Журнал дневных событий
 CREATE TABLE IF NOT EXISTS daily_events (
     id             SERIAL PRIMARY KEY,
     participant_id INTEGER NOT NULL REFERENCES participants(id) ON DELETE CASCADE,
