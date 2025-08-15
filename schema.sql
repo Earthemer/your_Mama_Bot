@@ -1,7 +1,3 @@
--- =================================================================
--- ФИНАЛЬНАЯ СХЕМА БД (Версия "Революция" - LLM-driven)
--- =================================================================
-
 -- Хранит базовые настройки и кастомную "личность" для LLM.
 CREATE TABLE IF NOT EXISTS mama_configs (
     id                  SERIAL PRIMARY KEY,
@@ -21,7 +17,8 @@ CREATE TABLE IF NOT EXISTS participants (
     role                    TEXT NOT NULL,
     custom_name             TEXT NOT NULL,
     gender                  TEXT NOT NULL,
-    relationship_score      INTEGER NOT NULL DEFAULT 50,
+    relationship_score INTEGER NOT NULL DEFAULT 50
+        CHECK (relationship_score >= 0 AND relationship_score <= 100),
     is_ignored              BOOLEAN NOT NULL DEFAULT false,
     created_at              TIMESTAMPTZ DEFAULT (now() at time zone 'utc'),
     updated_at              TIMESTAMPTZ DEFAULT (now() at time zone 'utc')
@@ -30,33 +27,34 @@ CREATE TABLE IF NOT EXISTS participants (
 CREATE TABLE IF NOT EXISTS daily_events (
     id             SERIAL PRIMARY KEY,
     participant_id INTEGER NOT NULL REFERENCES participants(id) ON DELETE CASCADE,
-    event_type     TEXT NOT NULL, -- 'greeting', 'thank_you', 'wished_good_night', 'breakfast'
-    event_date     DATE NOT NULL DEFAULT CURRENT_DATE
+    event_type     TEXT NOT NULL,
+    event_text     TEXT,
+    created_at     TIMESTAMPTZ DEFAULT (now() at time zone 'utc')
+);
+
+-- Таблица 3: Долгосрочная память
+CREATE TABLE IF NOT EXISTS long_term_memory (
+    id             SERIAL PRIMARY KEY,
+    participant_id INTEGER NOT NULL REFERENCES participants(id) ON DELETE CASCADE,
+    memory_summary TEXT NOT NULL,
+    created_at     TIMESTAMPTZ DEFAULT (now() at time zone 'utc')
 );
 
 -- Таблица 4: Готовые ответы ("Рефлексы")
 CREATE TABLE IF NOT EXISTS canned_responses (
     id                  SERIAL PRIMARY KEY,
-    context_tag         TEXT NOT NULL UNIQUE,
+    context_tag         TEXT NOT NULL,
     response_text       TEXT NOT NULL
-);
-
-
--- Таблица 4: Журнал дневных событий
-CREATE TABLE IF NOT EXISTS daily_events (
-    id             SERIAL PRIMARY KEY,
-    participant_id INTEGER NOT NULL REFERENCES participants(id) ON DELETE CASCADE,
-    event_type     TEXT NOT NULL, -- 'breakfast', 'bowel_movement', 'brushed_teeth'
-    event_date     DATE NOT NULL DEFAULT CURRENT_DATE
 );
 
 
 -- =================================================================
 -- ИНДЕКСЫ И ТРИГГЕРЫ
 -- =================================================================
+
 CREATE INDEX IF NOT EXISTS idx_mama_configs_chat_id ON mama_configs(chat_id);
 CREATE UNIQUE INDEX IF NOT EXISTS idx_unique_participant ON participants(config_id, user_id);
-CREATE UNIQUE INDEX IF NOT EXISTS idx_unique_daily_event ON daily_events(participant_id, event_type, event_date);
+CREATE INDEX IF NOT EXISTS idx_daily_events_participant_id_time ON daily_events(participant_id, created_at);
 CREATE INDEX IF NOT EXISTS idx_canned_responses_context_tag ON canned_responses(context_tag);
 
 CREATE OR REPLACE FUNCTION update_updated_at_column()

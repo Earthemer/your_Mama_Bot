@@ -1,10 +1,12 @@
 import logging
-from core.logging_config import log_error
 import asyncio
 import asyncpg
-from core.types import QueryMode
-from typing import Any, Literal
+
+from typing import Any
 from asyncpg import exceptions as error_database
+
+from core.logging_config import log_error
+from core.types import QueryMode
 from core.postgres_pool import PostgresPool
 from core.exceptions import (
     DatabaseConnectionError,
@@ -46,7 +48,7 @@ class AsyncDatabaseManager:
         """
         Не работает без пула подключения!
         Args:
-            :param query: SQL строки (используем плейсхолдеры $1, $2)
+            :param query: SQL строки (плейсхолдеры $1, $2)
             :param params: Кортеж параметров для SQL.
             :param mode: Параметр для execution SQL:
                 'execute': Возвращает количество затронутых строк (для INSERT/UPDATE/DELETE).
@@ -106,6 +108,39 @@ class AsyncDatabaseManager:
         logger.info(f"Конфигурация для чата {chat_id} успешно сохранена/обновлена.")
         return config_id
 
+    async def get_mama_config(self, chat_id: int) -> dict | None:
+        """Получает активную конфигурацию для бота из конкретного чата."""
+        logger.debug(f"Запрос конфигурации для чата {chat_id}...")
+        config_dict = await self._execute(
+            queries.GET_MAMA_CONFIG,
+            params=(chat_id,),
+            mode='fetch_row'
+        )
+        if config_dict:
+            logger.debug(f"Конфигурация для чата {chat_id} найдена.")
+            return config_dict
+        else:
+            logger.debug(f"Активная конфигурация для чата {chat_id} не найдена.")
+            return None
+
+    async def get_all_mama_configs(self) -> list[dict]:
+        """Получает ID всех чатов, где настроена мама."""
+        return await self._execute(queries.GET_ALL_MAMA_CONFIGS, mode='fetch_all')
+
+    async def delete_mama_config(self, chat_id: int) -> int:
+        """Удаляет конфигурацию для чата и возвращает количество удаленных строк."""
+        logger.info(f"Запрос на удаление конфигурации для чата {chat_id}.")
+        deleted_count = await self._execute(
+            queries.DELETE_MAMA_CONFIG,
+            params=(chat_id,),
+            mode='execute'
+        )
+        if deleted_count > 0:
+            logger.info(f"Конфигурация для чата {chat_id} успешно удалена.")
+        else:
+            logger.warning(f"Попытка удаления конфигурации для несуществующего чата {chat_id}.")
+        return deleted_count
+
     async def add_participant(
             self,
             config_id: int,
@@ -126,39 +161,6 @@ class AsyncDatabaseManager:
         )
         return participant_id
 
-    async def get_mama_config(self, chat_id: int) -> dict | None:
-        """Получает активную конфигурацию для бота из конкретного чата."""
-        logger.debug(f"Запрос конфигурации для чата {chat_id}...")
-        config_dict = await self._execute(
-            queries.GET_MAMA_CONFIG,
-            params=(chat_id,),
-            mode='fetch_row'
-        )
-        if config_dict:
-            logger.debug(f"Конфигурация для чата {chat_id} найдена.")
-            return config_dict
-        else:
-            logger.debug(f"Активная конфигурация для чата {chat_id} не найдена.")
-            return None
-
-    async def get_all_active_configs(self) -> list[dict]:
-        """Получает ID всех чатов, где настроена мама."""
-        return await self._execute(queries.GET_ALL_ACTIVE_CONFIGS, mode='fetch_all')
-
-    async def delete_mama_config(self, chat_id: int) -> int:
-        """Удаляет конфигурацию для чата и возвращает количество удаленных строк."""
-        logger.info(f"Запрос на удаление конфигурации для чата {chat_id}.")
-        deleted_count = await self._execute(
-            queries.DELETE_MAMA_CONFIG,
-            params=(chat_id,),
-            mode='execute'
-        )
-        if deleted_count > 0:
-            logger.info(f"Конфигурация для чата {chat_id} успешно удалена.")
-        else:
-            logger.warning(f"Попытка удаления конфигурации для несуществующего чата {chat_id}.")
-        return deleted_count
-
     async def get_participant(self, config_id: int, user_id: int) -> dict | None:
         """Получает полную информацию об участнике по его Telegram ID."""
         return await self._execute(queries.GET_PARTICIPANT_BY_USER_ID, params=(config_id, user_id), mode='fetch_row')
@@ -171,14 +173,34 @@ class AsyncDatabaseManager:
         """Обновляет только репутацию участника."""
         await self._execute(queries.UPDATE_RELATIONSHIP_SCORE, params=(score_change, participant_id), mode='execute')
 
-    async def add_daily_event(self, participant_id: int, event_type: str):
+    async def set_ignore_status(self, participant_id: int, status: bool):
+        """Устанавливает флаг is_ignored для участника и опускает relationship_scope до 0"""
+        await self._execute(queries.SET_IGNORED_STATUS, params=(status, participant_id), mode='execute')
+
+    async def add_daily_event(self, participant_id: int, event_type: str, event_text: str):
         """Добавляет дневное событие (например, 'breakfast')."""
-        await self._execute(queries.INSERT_DAILY_EVENT, params=(participant_id, event_type), mode='execute')
+        await self._execute(queries.INSERT_DAILY_EVENT, params=(participant_id, event_type, event_text), mode='execute')
 
     async def check_daily_event(self, participant_id: int, event_type: str) -> bool:
         """Проверяет, было ли сегодня определенное событие."""
         exists = await self._execute(queries.CHECK_DAILY_EVENT, params=(participant_id, event_type), mode='fetch_val')
         return exists or False
+
+    async def count_daily_events_by_type(self, participant_id: int, event_type: str):
+        """Считает, сколько раз сегодня произошло событие определенного типа."""
+        return await self._execute(queries.COUNT_DAILY_EVENTS_BY_TYPE, params=(participant_id, event_type), mode='execute') or 0
+
+    async def get_daily_events_summary(self, config_id: int) -> list[dict]:
+        """Получает сводку по всем событиям за день для указанной мамы."""
+        return await self._execute(queries.GET_DAILY_EVENTS_SUMMARY, params=(config_id,), mode='fetch_all')
+
+    async def add_long_term_memory(self, participant_id: int, summary: str):
+        """Добавляет новое "воспоминание" в долгосрочную память."""
+        await self._execute(queries.INSERT_LONG_TERM_MEMORY, params=(participant_id, summary), mode='execute')
+
+    async def get_long_term_memory(self, participant_id: int, limit: int = 5) -> list[dict]:
+        """Получает последние N "воспоминаний" для участника."""
+        return await self._execute(queries.GET_LONG_TERM_MEMORY, params=(participant_id, limit), mode='fetch_all')
 
     async def update_personality_prompt(self, config_id: int, prompt: str):
         await self._execute(queries.UPDATE_PERSONALITY_PROMPT, params=(prompt, config_id), mode='execute')

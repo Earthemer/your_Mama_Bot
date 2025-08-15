@@ -1,9 +1,11 @@
 import logging
+
 from aiogram import Router, F, types
 from aiogram.fsm.context import FSMContext
 from aiogram.enums import  ChatType
 
 from core.database import AsyncDatabaseManager
+from core.config import parameters
 
 logger = logging.getLogger(__name__)
 router = Router()

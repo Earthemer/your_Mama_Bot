@@ -1,9 +1,8 @@
 import logging
-from core.logging_config import setup_logging
 from dotenv import load_dotenv
 from core.utils import get_str_env, get_int_env, get_float_env
 
-setup_logging()
+
 logger = logging.getLogger(__name__)
 load_dotenv()
 
@@ -37,5 +36,5 @@ POOL_PARAMETERS = {
 }
 
 # ------- Scheduler -------
-ACTIVE_MODE_DURATION_MINUTES = get_int_env('ACTIVE_MODE_DURATION_MINUTES', 20)
-CREATIVE_RESPONSES_LIMIT = get_int_env('CREATIVE_RESPONSES_LIMIT', 10)
+ACTIVE_MODE_DURATION_MINUTES = get_int_env('ACTIVE_MODE_DURATION_MINUTES', 10)
+CREATIVE_RESPONSES_LIMIT = get_int_env('CREATIVE_RESPONSES_LIMIT', 7)

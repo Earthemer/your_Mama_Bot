@@ -1,8 +1,6 @@
 import asyncio
 import logging
 
-from joblib.testing import param
-
 from core import config
 from aiogram import Bot, Dispatcher
 from aiogram.fsm.storage.memory import MemoryStorage
