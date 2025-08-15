@@ -5,16 +5,13 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="a4a324bf-c04b-4881-952c-8c80f312c061" name="Changes" comment="">
-      <change afterPath="$PROJECT_DIR$/core/config/__init__.py" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/core/config/promts.py" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/handlers/interactions/__init__.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/handlers/operator.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/bot.py" beforeDir="false" afterPath="$PROJECT_DIR$/bot.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/core/config.py" beforeDir="false" afterPath="$PROJECT_DIR$/core/config/parameters.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/core/database.py" beforeDir="false" afterPath="$PROJECT_DIR$/core/database.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/core/scheduler.py" beforeDir="false" afterPath="$PROJECT_DIR$/core/scheduler.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/core/sql_queries.py" beforeDir="false" afterPath="$PROJECT_DIR$/core/sql_queries.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/handlers/interactions.py" beforeDir="false" afterPath="$PROJECT_DIR$/handlers/interactions/operator.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/handlers/interactions/acquaintance.py" beforeDir="false" afterPath="$PROJECT_DIR$/handlers/interactions/acquaintance.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/handlers/interactions/active_mode.py" beforeDir="false" afterPath="$PROJECT_DIR$/handlers/interactions/active_mode.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/handlers/interactions/operator.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/handlers/interactions/waiting_mode.py" beforeDir="false" afterPath="$PROJECT_DIR$/handlers/interactions/waiting_mode.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/schema.sql" beforeDir="false" afterPath="$PROJECT_DIR$/schema.sql" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
@@ -30,6 +27,11 @@
     </option>
   </component>
   <component name="Git.Settings">
+    <option name="RECENT_BRANCH_BY_REPOSITORY">
+      <map>
+        <entry key="$PROJECT_DIR$" value="alpha" />
+      </map>
+    </option>
     <option name="RECENT_GIT_ROOT_PATH" value="$PROJECT_DIR$" />
   </component>
   <component name="ProjectColorInfo">{
@@ -48,7 +50,7 @@
     "Python.testcode.executor": "Run",
     "RunOnceActivity.ShowReadmeOnStart": "true",
     "RunOnceActivity.git.unshallow": "true",
-    "git-widget-placeholder": "alpha",
+    "git-widget-placeholder": "alpha-operator",
     "last_opened_file_path": "C:/Users/urthe/PycharmProjects/your_Mama_Bot"
   }
 }]]></component>
@@ -60,8 +62,8 @@
       <recent name="C:\Users\urthe\PycharmProjects\your_Mama_Bot\tests" />
     </key>
     <key name="MoveFile.RECENT_KEYS">
-      <recent name="C:\Users\urthe\PycharmProjects\your_Mama_Bot\handlers\interactions" />
       <recent name="C:\Users\urthe\PycharmProjects\your_Mama_Bot\handlers" />
+      <recent name="C:\Users\urthe\PycharmProjects\your_Mama_Bot\handlers\interactions" />
       <recent name="C:\Users\urthe\PycharmProjects\your_Mama_Bot\core\config" />
       <recent name="C:\Users\urthe\PycharmProjects\your_Mama_Bot\core" />
       <recent name="C:\Users\urthe\PycharmProjects\your_Mama_Bot" />
@@ -92,6 +94,8 @@
     </configuration>
     <recent_temporary>
       <list>
+        <item itemvalue="Python.bot" />
+        <item itemvalue="Python.bot" />
         <item itemvalue="Python.bot" />
       </list>
     </recent_temporary>
