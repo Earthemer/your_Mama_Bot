@@ -40,14 +40,6 @@ CREATE TABLE IF NOT EXISTS long_term_memory (
     created_at     TIMESTAMPTZ DEFAULT (now() at time zone 'utc')
 );
 
--- Таблица 4: Готовые ответы ("Рефлексы")
-CREATE TABLE IF NOT EXISTS canned_responses (
-    id                  SERIAL PRIMARY KEY,
-    context_tag         TEXT NOT NULL,
-    response_text       TEXT NOT NULL
-);
-
-
 -- =================================================================
 -- ИНДЕКСЫ И ТРИГГЕРЫ
 -- =================================================================
@@ -55,7 +47,6 @@ CREATE TABLE IF NOT EXISTS canned_responses (
 CREATE INDEX IF NOT EXISTS idx_mama_configs_chat_id ON mama_configs(chat_id);
 CREATE UNIQUE INDEX IF NOT EXISTS idx_unique_participant ON participants(config_id, user_id);
 CREATE INDEX IF NOT EXISTS idx_daily_events_participant_id_time ON daily_events(participant_id, created_at);
-CREATE INDEX IF NOT EXISTS idx_canned_responses_context_tag ON canned_responses(context_tag);
 
 CREATE OR REPLACE FUNCTION update_updated_at_column()
 RETURNS TRIGGER AS $$
