@@ -1,5 +1,8 @@
 import logging
+
 from dotenv import load_dotenv
+from faker import Faker
+
 from core.utils import get_str_env, get_int_env, get_float_env
 
 
@@ -20,11 +23,26 @@ if GEMINI_API_KEY == 'default':
 # ------- DSN -------
 DB_USER = get_str_env('DB_USER', 'postgres')
 DB_PASSWORD = get_str_env('DB_PASSWORD', 'password')
-DB_HOST = get_str_env('DB_HOST', "localhost")
-DB_PORT = get_str_env('DB_PORT', '5432')
+DB_HOST = get_str_env('DB_HOST', 'localhost')
+DB_PORT = get_int_env('DB_PORT', 5432)
 DB_NAME = get_str_env('DB_NAME', 'your_mama_bot_db')
-
 DATABASE_URL = f"postgresql://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
+
+# ------- DSN for test_db -------
+TEST_DB_USER = get_str_env('TEST_DB_USER', 'postgres')
+TEST_DB_PASSWORD = get_str_env('TEST_DB_PASSWORD', 'password')
+TEST_DB_HOST = get_str_env('TEST_DB_HOST', 'localhost')
+TEST_DB_PORT = get_int_env('TEST_DB_PORT', 5432)
+TEST_DB_NAME = get_str_env('TEST_DB_NAME', 'test_mama_db')
+TEST_DATABASE_URL = f"postgresql://{TEST_DB_USER}:{TEST_DB_PASSWORD}@{TEST_DB_HOST}:{TEST_DB_PORT}/{TEST_DB_NAME}"
+
+TEST_TABLES = [
+    "daily_events",
+    "long_term_memory",
+    "participants",
+    "mama_configs",
+]
+
 
 # ------- FOR POOL -------
 POOL_PARAMETERS = {
@@ -38,3 +56,5 @@ POOL_PARAMETERS = {
 # ------- Scheduler -------
 ACTIVE_MODE_DURATION_MINUTES = get_int_env('ACTIVE_MODE_DURATION_MINUTES', 10)
 CREATIVE_RESPONSES_LIMIT = get_int_env('CREATIVE_RESPONSES_LIMIT', 7)
+
+fake = Faker("ru_RU")
