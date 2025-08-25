@@ -15,14 +15,18 @@ ON CONFLICT (chat_id) DO UPDATE SET
 RETURNING id;
 """
 
+SET_CHILD = """
+UPDATE mama_configs SET child_participant_id = $1 WHERE id = $2;
+"""
+
 GET_MAMA_CONFIG = """
-SELECT id, chat_id, bot_name, admin_id, timezone, personality_prompt
+SELECT id, chat_id, bot_name, admin_id, child_participant_id, timezone, personality_prompt
 FROM mama_configs
 WHERE chat_id = $1;
 """
 
 GET_ALL_MAMA_CONFIGS = """
-SELECT id, chat_id, bot_name, admin_id, timezone, personality_prompt 
+SELECT id, chat_id, bot_name, admin_id, child_participant_id, timezone, personality_prompt 
 FROM mama_configs;
 """
 
@@ -31,67 +35,70 @@ DELETE FROM mama_configs WHERE chat_id = $1;
 """
 
 INSERT_PARTICIPANT = """
-INSERT INTO participants (config_id, user_id, role, custom_name, gender)
-VALUES ($1, $2, $3, $4, $5)
-RETURNING id;
+INSERT INTO participants (config_id, user_id, custom_name, gender)
+VALUES ($1, $2, $3, $4)
+RETURNING id, custom_name;
 """
+
+UPDATE_PERSONALITY_PROMPT = "UPDATE mama_configs SET personality_prompt = $1 WHERE id = $2;"
 
 # =================================================================
 # ЭТАП 2: Запросы для "мозга" и жизненного цикла
 # =================================================================
 
-GET_PARTICIPANT_BY_USER_ID = """
-SELECT id, role, custom_name, gender, relationship_score, is_ignored
+GET_PARTICIPANT = """
+SELECT id, custom_name, gender, relationship_score, is_ignored, last_interaction_at
 FROM participants
 WHERE config_id = $1 AND user_id = $2;
 """
 
-GET_CHILD_PARTICIPANT = """
-SELECT id, custom_name FROM participants
-WHERE config_id = $1 AND role = 'child'
-LIMIT 1;
+GET_CHILD = """
+SELECT p.id, p.custom_name FROM participants p
+JOIN mama_configs mc ON p.id = mc.child_participant_id
+WHERE mc.id = $1;
 """
 
 UPDATE_RELATIONSHIP_SCORE = """
 UPDATE participants
-SET relationship_score = relationship_score + $1
+SET 
+    relationship_score = GREATEST(0, LEAST(100, relationship_score + $1)),
+    last_interaction_at = now() at time zone 'utc'
 WHERE id = $2;
 """
 
 SET_IGNORED_STATUS = """
 UPDATE participants
-SET is_ignored = $1, relationship_score = 0
+SET 
+    is_ignored = $1,
+    relationship_score = CASE WHEN $1 = TRUE THEN -1 ELSE relationship_score END
 WHERE id = $2;
 """
 
-INSERT_DAILY_EVENT = """
-INSERT INTO daily_events (participant_id, event_type, event_text)
-VALUES ($1, $2, $3);
+# --- Журнал сообщений (Message Log) ---
+INSERT_MESSAGE_LOG = """
+INSERT INTO message_log (config_id, participant_id, user_id, message_text, message_type)
+VALUES ($1, $2, $3, $4, $5);
 """
 
-CHECK_DAILY_EVENT = """
-SELECT EXISTS (
-    SELECT 1 FROM daily_events
-    WHERE participant_id = $1 AND event_type = $2 AND created_at >= date_trunc('day', now() at time zone 'utc')
-);
+GET_MESSAGE_LOG_FOR_PROCESSING = """
+SELECT 
+    ml.user_id,
+    ml.message_text,
+    ml.message_type,
+    p.custom_name
+FROM message_log ml
+LEFT JOIN participants p ON ml.participant_id = p.id
+WHERE ml.config_id = $1 AND ml.created_at >= $2
+ORDER BY ml.created_at;
 """
 
-COUNT_DAILY_EVENTS_BY_TYPE = """
-SELECT COUNT(*) FROM daily_events
-WHERE participant_id = $1 AND event_type = $2 AND created_at >= date_trunc('day', now() at time zone 'utc');
-"""
-
-GET_DAILY_EVENTS_SUMMARY = """
-SELECT p.custom_name, p.role, de.event_type, de.event_text
-FROM daily_events de
-JOIN participants p ON de.participant_id = p.id
-WHERE p.config_id = $1 AND de.created_at >= date_trunc('day', now() at time zone 'utc')
-ORDER BY de.created_at;
+DELETE_PROCESSED_MESSAGES = """
+DELETE FROM message_log WHERE config_id = $1 AND created_at < $2;
 """
 
 INSERT_LONG_TERM_MEMORY = """
-INSERT INTO long_term_memory (participant_id, memory_summary)
-VALUES ($1, $2);
+INSERT INTO long_term_memory (participant_id, memory_summary, importance_level)
+VALUES ($1, $2, $3);
 """
 
 GET_LONG_TERM_MEMORY = """
@@ -101,8 +108,3 @@ ORDER BY created_at DESC
 LIMIT $2;
 """
 
-DELETE_ALL_DAILY_EVENTS = """
-DELETE FROM daily_events;
-"""
-
-UPDATE_PERSONALITY_PROMPT = "UPDATE mama_configs SET personality_prompt = $1 WHERE id = $2;"

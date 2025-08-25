@@ -4,6 +4,7 @@ CREATE TABLE IF NOT EXISTS mama_configs (
     chat_id             BIGINT NOT NULL UNIQUE,
     bot_name            TEXT NOT NULL,
     admin_id            BIGINT NOT NULL,
+    child_id INT REFERENCES participants(id),
     timezone            TEXT NOT NULL,
     personality_prompt  TEXT,
     created_at          TIMESTAMPTZ DEFAULT (now() at time zone 'utc'),
@@ -14,7 +15,6 @@ CREATE TABLE IF NOT EXISTS participants (
     id                      SERIAL PRIMARY KEY,
     config_id               INTEGER NOT NULL REFERENCES mama_configs(id) ON DELETE CASCADE,
     user_id                 BIGINT NOT NULL,
-    role                    TEXT NOT NULL,
     custom_name             TEXT NOT NULL,
     gender                  TEXT NOT NULL,
     relationship_score INTEGER NOT NULL DEFAULT 50
@@ -24,7 +24,6 @@ CREATE TABLE IF NOT EXISTS participants (
     created_at              TIMESTAMPTZ DEFAULT (now() at time zone 'utc'),
     updated_at              TIMESTAMPTZ DEFAULT (now() at time zone 'utc')
 );
-
 -- Таблица 3: Журнал сообщений
 CREATE TABLE IF NOT EXISTS message_log (
     id                  SERIAL PRIMARY KEY,
@@ -33,7 +32,6 @@ CREATE TABLE IF NOT EXISTS message_log (
     user_id             BIGINT NOT NULL,
     message_text        TEXT,
     message_type        TEXT NOT NULL,
-    batch_id            BIGINT,
     created_at          TIMESTAMPTZ DEFAULT (now() at time zone 'utc')
 );
 -- Таблица 4: Долгосрочная память (Архив)
@@ -54,7 +52,6 @@ CREATE TABLE IF NOT EXISTS long_term_memory (
 CREATE INDEX IF NOT EXISTS idx_mama_configs_chat_id ON mama_configs(chat_id);
 CREATE UNIQUE INDEX IF NOT EXISTS idx_unique_participant ON participants(config_id, user_id);
 CREATE INDEX IF NOT EXISTS idx_message_log_config_id_time ON message_log(config_id, created_at);
-CREATE INDEX IF NOT EXISTS idx_message_log_batch_id ON message_log(batch_id);
 
 CREATE OR REPLACE FUNCTION update_updated_at_column()
 RETURNS TRIGGER AS $$

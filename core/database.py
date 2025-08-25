@@ -4,6 +4,7 @@ import asyncpg
 
 from typing import Any
 from asyncpg import exceptions as error_database
+from datetime import datetime
 
 from core.logging_config import log_error
 from core.types import QueryMode
@@ -108,6 +109,10 @@ class AsyncDatabaseManager:
         logger.info(f"Конфигурация для чата {chat_id} успешно сохранена/обновлена.")
         return config_id
 
+    async def set_child(self, child_participant_id, config_id):
+        """Устанавливает ребенка для конкретной конфигураций мамы"""
+        return await self._execute(queries.SET_CHILD, params=(child_participant_id, config_id), mode='execute')
+
     async def get_mama_config(self, chat_id: int) -> dict | None:
         """Получает активную конфигурацию для бота из конкретного чата."""
         logger.debug(f"Запрос конфигурации для чата {chat_id}...")
@@ -145,69 +150,71 @@ class AsyncDatabaseManager:
             self,
             config_id: int,
             user_id: int,
-            role: str,
             custom_name: str,
-            gender: str
-    ) -> int:
+            gender: str,
+    ) -> dict[str, Any]:
         """Добавляет пользователя в память бота, и возвращает его уникальный ID."""
-        participant_id = await self._execute(
+        participant = await self._execute(
             queries.INSERT_PARTICIPANT,
-            params=(config_id, user_id, role, custom_name, gender),
-            mode='fetch_val'
+            params=(config_id, user_id, custom_name, gender),
+            mode='fetch_row'
         )
         logger.info(
-            f"Для мамы с ID {config_id} добавлен участник {user_id} "
-            f"с ролью '{role}'. Его ID в таблице: {participant_id}."
+            f"Для мамы с ID {config_id} добавлен участник {user_id}. Его ID в таблице: {participant}."
         )
-        return participant_id
-
-    async def get_participant(self, config_id: int, user_id: int) -> dict | None:
-        """Получает полную информацию об участнике по его Telegram ID."""
-        return await self._execute(queries.GET_PARTICIPANT_BY_USER_ID, params=(config_id, user_id), mode='fetch_row')
-
-    async def get_child_participant(self, config_id: int) -> dict | None:
-        """Получается ID и имя ребенка для текущей мамы."""
-        return await self._execute(queries.GET_CHILD_PARTICIPANT, params=(config_id,), mode='fetch_row')
-
-    async def update_relationship_scope(self, participant_id: int, score_change: int):
-        """Обновляет только репутацию участника."""
-        await self._execute(queries.UPDATE_RELATIONSHIP_SCORE, params=(score_change, participant_id), mode='execute')
-
-    async def set_ignore_status(self, participant_id: int, status: bool):
-        """Устанавливает флаг is_ignored для участника и опускает relationship_scope до 0"""
-        await self._execute(queries.SET_IGNORED_STATUS, params=(status, participant_id), mode='execute')
-
-    async def add_daily_event(self, participant_id: int, event_type: str, event_text: str):
-        """Добавляет дневное событие (например, 'breakfast')."""
-        await self._execute(queries.INSERT_DAILY_EVENT, params=(participant_id, event_type, event_text), mode='execute')
-
-    async def check_daily_event(self, participant_id: int, event_type: str) -> bool:
-        """Проверяет, было ли сегодня определенное событие."""
-        exists = await self._execute(queries.CHECK_DAILY_EVENT, params=(participant_id, event_type), mode='fetch_val')
-        return exists or False
-
-    async def count_daily_events_by_type(self, participant_id: int, event_type: str):
-        """Считает, сколько раз сегодня произошло событие определенного типа."""
-        return await self._execute(queries.COUNT_DAILY_EVENTS_BY_TYPE, params=(participant_id, event_type), mode='execute') or 0
-
-    async def get_daily_events_summary(self, config_id: int) -> list[dict]:
-        """Получает сводку по всем событиям за день для указанной мамы."""
-        return await self._execute(queries.GET_DAILY_EVENTS_SUMMARY, params=(config_id,), mode='fetch_all')
-
-    async def add_long_term_memory(self, participant_id: int, summary: str):
-        """Добавляет новое "воспоминание" в долгосрочную память."""
-        await self._execute(queries.INSERT_LONG_TERM_MEMORY, params=(participant_id, summary), mode='execute')
-
-    async def get_long_term_memory(self, participant_id: int, limit: int = 5) -> list[dict]:
-        """Получает последние N "воспоминаний" для участника."""
-        return await self._execute(queries.GET_LONG_TERM_MEMORY, params=(participant_id, limit), mode='fetch_all')
+        return participant
 
     async def update_personality_prompt(self, config_id: int, prompt: str):
         await self._execute(queries.UPDATE_PERSONALITY_PROMPT, params=(prompt, config_id), mode='execute')
 
-    async def delete_all_daily_events(self) -> int:
-        """Очищает таблицу daily_events полностью (новый день)."""
-        return await self._execute(
-            queries.DELETE_ALL_DAILY_EVENTS,
+    async def get_participant(self, config_id: int, user_id: int) -> dict | None:
+        """Получает полную информацию об участнике по его Telegram ID."""
+        return await self._execute(queries.GET_PARTICIPANT, params=(config_id, user_id), mode='fetch_row')
+
+    async def get_child(self, config_id: int) -> dict | None:
+        """Получается ID и имя ребенка для текущей мамы."""
+        return await self._execute(queries.GET_CHILD, params=(config_id,), mode='fetch_row')
+
+    async def update_relationship_scope(self, participant_id: int, score_change: int) -> None:
+        """Обновляет только репутацию участника."""
+        await self._execute(queries.UPDATE_RELATIONSHIP_SCORE, params=(score_change, participant_id), mode='execute')
+
+    async def set_ignore_status(self, participant_id: int, status: bool) -> None:
+        """Устанавливает флаг is_ignored для участника и опускает relationship_scope до 0"""
+        await self._execute(queries.SET_IGNORED_STATUS, params=(status, participant_id), mode='execute')
+
+    async def add_message_log(
+            self,
+            config_id: int,
+            participant_id: int,
+            user_id: id,
+            message_text: str,
+            message_type: str) -> None:
+        """Логируем сообщения полученные в чате."""
+        await self._execute(
+            queries.INSERT_MESSAGE_LOG,
+            params=(config_id, participant_id, user_id, message_text, message_type),
             mode='execute'
         )
+
+    async def get_message_log_for_processing(self, config_id: int, created_at: datetime) -> list[dict]: # <-- меняем тип
+        """Возвращает пакет сообщений в указанный промежуток времени."""
+        return await self._execute(queries.GET_MESSAGE_LOG_FOR_PROCESSING, params=(config_id, created_at),
+                                   mode='fetch_all')
+
+    async def delete_processed_messages(self, config_id: int, created_at: datetime) -> None:
+        """Удаляет пакет сообщение в указанный промежуток времени."""
+        return await self._execute(queries.DELETE_PROCESSED_MESSAGES, params=(config_id, created_at), mode='execute')
+
+    async def add_long_term_memory(self, participant_id, memory_summary, importance_level) -> None:
+        """Запоминаем важное событие или действие."""
+        return await self._execute(
+            queries.INSERT_LONG_TERM_MEMORY,
+            params=(participant_id, memory_summary, importance_level),
+            mode='execute'
+        )
+
+    async def get_long_term_memory(self, participant_id: int, limit_logs: int) -> dict | None:
+        """Возвращаем данные сохраненные в памяти о пользователе."""
+        return await self._execute(queries.GET_LONG_TERM_MEMORY, params=(participant_id, limit_logs), mode='fetch_row')
+
