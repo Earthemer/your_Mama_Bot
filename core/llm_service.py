@@ -7,7 +7,6 @@ from core.exceptions import LLMError
 
 logger = logging.getLogger(__name__)
 
-
 GENERATION_CONFIG = types.GenerateContentConfig(
     temperature=0.9,
     top_p=1,

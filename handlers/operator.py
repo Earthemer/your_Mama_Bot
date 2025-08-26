@@ -29,7 +29,8 @@ async def mama_listener_operator(
     if not (config := await db.get_mama_config(message.chat.id)):
         return
 
-    if not (participant := await db.get_participant(config['id'], message.from_user.id)) and participant.get('is_ignored'):
+    participant = await db.get_participant(config['id'], message.from_user.id)
+    if participant is not None and participant.get('is_ignored'):
         return
 
     storage = state.storage

@@ -109,10 +109,6 @@ class AsyncDatabaseManager:
         logger.info(f"Конфигурация для чата {chat_id} успешно сохранена/обновлена.")
         return config_id
 
-    async def set_child(self, child_participant_id, config_id):
-        """Устанавливает ребенка для конкретной конфигураций мамы"""
-        return await self._execute(queries.SET_CHILD, params=(child_participant_id, config_id), mode='execute')
-
     async def get_mama_config(self, chat_id: int) -> dict | None:
         """Получает активную конфигурацию для бота из конкретного чата."""
         logger.debug(f"Запрос конфигурации для чата {chat_id}...")
@@ -153,7 +149,7 @@ class AsyncDatabaseManager:
             custom_name: str,
             gender: str,
     ) -> dict[str, Any]:
-        """Добавляет пользователя в память бота, и возвращает его уникальный ID."""
+        """Добавляет пользователя в память бота, и возвращает dict с его уникальным ID и custom_name."""
         participant = await self._execute(
             queries.INSERT_PARTICIPANT,
             params=(config_id, user_id, custom_name, gender),
@@ -163,6 +159,10 @@ class AsyncDatabaseManager:
             f"Для мамы с ID {config_id} добавлен участник {user_id}. Его ID в таблице: {participant}."
         )
         return participant
+
+    async def set_child(self, child_participant_id, config_id):
+        """Устанавливает ребенка для конкретной конфигураций мамы"""
+        return await self._execute(queries.SET_CHILD, params=(child_participant_id, config_id), mode='execute')
 
     async def update_personality_prompt(self, config_id: int, prompt: str):
         await self._execute(queries.UPDATE_PERSONALITY_PROMPT, params=(prompt, config_id), mode='execute')
@@ -180,7 +180,7 @@ class AsyncDatabaseManager:
         await self._execute(queries.UPDATE_RELATIONSHIP_SCORE, params=(score_change, participant_id), mode='execute')
 
     async def set_ignore_status(self, participant_id: int, status: bool) -> None:
-        """Устанавливает флаг is_ignored для участника и опускает relationship_scope до 0"""
+        """Устанавливает флаг is_ignored для участника и опускает relationship_score до 0"""
         await self._execute(queries.SET_IGNORED_STATUS, params=(status, participant_id), mode='execute')
 
     async def add_message_log(
@@ -197,7 +197,8 @@ class AsyncDatabaseManager:
             mode='execute'
         )
 
-    async def get_message_log_for_processing(self, config_id: int, created_at: datetime) -> list[dict]: # <-- меняем тип
+    async def get_message_log_for_processing(self, config_id: int, created_at: datetime) -> list[
+        dict]:  # <-- меняем тип
         """Возвращает пакет сообщений в указанный промежуток времени."""
         return await self._execute(queries.GET_MESSAGE_LOG_FOR_PROCESSING, params=(config_id, created_at),
                                    mode='fetch_all')
@@ -217,4 +218,3 @@ class AsyncDatabaseManager:
     async def get_long_term_memory(self, participant_id: int, limit_logs: int) -> dict | None:
         """Возвращаем данные сохраненные в памяти о пользователе."""
         return await self._execute(queries.GET_LONG_TERM_MEMORY, params=(participant_id, limit_logs), mode='fetch_row')
-

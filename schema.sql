@@ -4,7 +4,7 @@ CREATE TABLE IF NOT EXISTS mama_configs (
     chat_id             BIGINT NOT NULL UNIQUE,
     bot_name            TEXT NOT NULL,
     admin_id            BIGINT NOT NULL,
-    child_id INT REFERENCES participants(id),
+    child_participant_id INT,
     timezone            TEXT NOT NULL,
     personality_prompt  TEXT,
     created_at          TIMESTAMPTZ DEFAULT (now() at time zone 'utc'),
@@ -17,7 +17,7 @@ CREATE TABLE IF NOT EXISTS participants (
     user_id                 BIGINT NOT NULL,
     custom_name             TEXT NOT NULL,
     gender                  TEXT NOT NULL,
-    relationship_score INTEGER NOT NULL DEFAULT 50
+    relationship_score      INTEGER NOT NULL DEFAULT 50
         CHECK (relationship_score >= 0 AND relationship_score <= 100),
     is_ignored              BOOLEAN NOT NULL DEFAULT false,
     last_interaction_at     TIMESTAMPTZ,
@@ -28,7 +28,7 @@ CREATE TABLE IF NOT EXISTS participants (
 CREATE TABLE IF NOT EXISTS message_log (
     id                  SERIAL PRIMARY KEY,
     config_id           INTEGER NOT NULL REFERENCES mama_configs(id) ON DELETE CASCADE,
-    participant_id      INTEGER,
+    participant_id      INTEGER REFERENCES participants(id) ON DELETE SET NULL,
     user_id             BIGINT NOT NULL,
     message_text        TEXT,
     message_type        TEXT NOT NULL,
@@ -40,7 +40,7 @@ CREATE TABLE IF NOT EXISTS long_term_memory (
     participant_id      INTEGER NOT NULL REFERENCES participants(id) ON DELETE CASCADE,
     memory_summary      TEXT NOT NULL,
     importance_level    INTEGER NOT NULL DEFAULT 1
-        CHECK (importance_level >= 1 AND importance_level <= 5), -- 1 - рядовое, 5 - критически важное
+        CHECK (importance_level >= 1 AND importance_level <= 5),
     created_at          TIMESTAMPTZ DEFAULT (now() at time zone 'utc')
 );
 
@@ -48,6 +48,14 @@ CREATE TABLE IF NOT EXISTS long_term_memory (
 -- =================================================================
 -- ИНДЕКСЫ И ТРИГГЕРЫ
 -- =================================================================
+
+
+ALTER TABLE mama_configs
+ADD CONSTRAINT fk_child_participant_id
+FOREIGN KEY (child_participant_id)
+REFERENCES participants(id)
+ON DELETE SET NULL
+DEFERRABLE INITIALLY DEFERRED;
 
 CREATE INDEX IF NOT EXISTS idx_mama_configs_chat_id ON mama_configs(chat_id);
 CREATE UNIQUE INDEX IF NOT EXISTS idx_unique_participant ON participants(config_id, user_id);

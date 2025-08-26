@@ -70,7 +70,7 @@ SET_IGNORED_STATUS = """
 UPDATE participants
 SET 
     is_ignored = $1,
-    relationship_score = CASE WHEN $1 = TRUE THEN -1 ELSE relationship_score END
+    relationship_score = CASE WHEN $1 = TRUE THEN 0 ELSE relationship_scoree END
 WHERE id = $2;
 """
 
