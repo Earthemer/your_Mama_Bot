@@ -28,7 +28,7 @@ CREATE TABLE IF NOT EXISTS participants (
 CREATE TABLE IF NOT EXISTS message_log (
     id                  SERIAL PRIMARY KEY,
     config_id           INTEGER NOT NULL REFERENCES mama_configs(id) ON DELETE CASCADE,
-    participant_id      INTEGER REFERENCES participants(id) ON DELETE SET NULL,
+    participant_id      INTEGER,
     user_id             BIGINT NOT NULL,
     message_text        TEXT,
     message_type        TEXT NOT NULL,

@@ -70,14 +70,15 @@ SET_IGNORED_STATUS = """
 UPDATE participants
 SET 
     is_ignored = $1,
-    relationship_score = CASE WHEN $1 = TRUE THEN 0 ELSE relationship_scoree END
+    relationship_score = CASE WHEN $1 THEN 0 ELSE relationship_score END
 WHERE id = $2;
 """
 
 # --- Журнал сообщений (Message Log) ---
 INSERT_MESSAGE_LOG = """
 INSERT INTO message_log (config_id, participant_id, user_id, message_text, message_type)
-VALUES ($1, $2, $3, $4, $5);
+VALUES ($1, $2, $3, $4, $5)
+RETURNING created_at; 
 """
 
 GET_MESSAGE_LOG_FOR_PROCESSING = """

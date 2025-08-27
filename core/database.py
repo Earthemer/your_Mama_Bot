@@ -164,7 +164,7 @@ class AsyncDatabaseManager:
         """Устанавливает ребенка для конкретной конфигураций мамы"""
         return await self._execute(queries.SET_CHILD, params=(child_participant_id, config_id), mode='execute')
 
-    async def update_personality_prompt(self, config_id: int, prompt: str):
+    async def update_personality_prompt(self, prompt: str, config_id: int):
         await self._execute(queries.UPDATE_PERSONALITY_PROMPT, params=(prompt, config_id), mode='execute')
 
     async def get_participant(self, config_id: int, user_id: int) -> dict | None:
@@ -186,19 +186,21 @@ class AsyncDatabaseManager:
     async def add_message_log(
             self,
             config_id: int,
-            participant_id: int,
-            user_id: id,
-            message_text: str,
-            message_type: str) -> None:
-        """Логируем сообщения полученные в чате."""
-        await self._execute(
+            user_id: int,
+            message_type: str,
+            participant_id: int | None = None,
+            message_text: str | None = None
+    ) -> datetime:
+        """Логируем сообщение и ВОЗВРАЩАЕМ его точное время создания из БД."""
+        created_at = await self._execute(
             queries.INSERT_MESSAGE_LOG,
             params=(config_id, participant_id, user_id, message_text, message_type),
-            mode='execute'
+            mode='fetch_val'
         )
+        return created_at
 
     async def get_message_log_for_processing(self, config_id: int, created_at: datetime) -> list[
-        dict]:  # <-- меняем тип
+        dict]:
         """Возвращает пакет сообщений в указанный промежуток времени."""
         return await self._execute(queries.GET_MESSAGE_LOG_FOR_PROCESSING, params=(config_id, created_at),
                                    mode='fetch_all')

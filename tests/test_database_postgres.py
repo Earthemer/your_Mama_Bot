@@ -1,14 +1,14 @@
 import pytest
 import pytest_asyncio
 import os.path
-import asyncpg
-import asyncio
 
 from typing import AsyncGenerator
 from unittest.mock import AsyncMock
 from contextlib import asynccontextmanager
 from asyncpg import InvalidSQLStatementNameError
 from asyncio import TimeoutError
+
+from datetime import datetime, timedelta, timezone
 
 from core.config.parameters import TEST_DATABASE_URL, TEST_TABLES, fake
 from core.database import AsyncDatabaseManager
@@ -67,30 +67,65 @@ async def db_manager(pool_connection: PostgresPool):
 
 
 @pytest_asyncio.fixture(scope='function')
-async def bot_data():
-    return {
-        'chat_id': fake.random_number(digits=9),
-        'bot_name': fake.name(),
-        'admin_id': fake.random_number(digits=9),
-        'timezone': fake.timezone(),
-    }
+def bot_data():
+    def _make_bot_data(**overrides):
+        base = {
+            'chat_id': fake.random_number(digits=9),
+            'bot_name': fake.name(),
+            'admin_id': fake.random_number(digits=9),
+            'timezone': fake.timezone()
+        }
+        base.update(overrides)
+        return base
+
+    return _make_bot_data
 
 
 @pytest_asyncio.fixture(scope='function')
-async def participant_data():
-    return {
-        'config_id': fake.random_number(digits=9),
-        'custom_name': fake.name(),
-        'user_id': fake.random_number(digits=9),
-        'timezone': fake.timezone(),
-        'gender': 'male'
-    }
+def cargo_bot_db(db_manager):
+    async def _insert_bot(bot: dict) -> int:
+        return await db_manager.upsert_mama_config(
+            chat_id=bot['chat_id'],
+            bot_name=bot['bot_name'],
+            admin_id=bot['admin_id'],
+            timezone=bot['timezone'],
+            personality_prompt=None
+        )
+
+    return _insert_bot
+
+
+@pytest_asyncio.fixture(scope='function')
+def participant_data():
+    def _make_participant_data(**overrides):
+        base = {
+            'config_id': None,
+            'user_id': fake.random_number(digits=9),
+            'custom_name': fake.name(),
+            'gender': 'male'
+        }
+        base.update(overrides)
+        return base
+
+    return _make_participant_data
+
+
+@pytest_asyncio.fixture(scope='function')
+def cargo_participant_data(db_manager):
+    async def _insert_cargo(data: dict) -> dict:
+        return await db_manager.add_participant(
+            config_id=data['config_id'],
+            user_id=data['user_id'],
+            custom_name=data['custom_name'],
+            gender=data['gender']
+        )
+
+    return _insert_cargo
 
 
 # --- Тесты ошибки в _execute
 @pytest.mark.asyncio
-async def test_execute_pool_raises_database_connection_error(pool_connection: PostgresPool,
-                                                             db_manager: AsyncDatabaseManager):
+async def test_execute_pool_raises_database_connection_error(pool_connection, db_manager):
     @asynccontextmanager
     async def fake_acquire(*args, **kwargs):
         raise PoolConnectionError("Пул не инициализирован")
@@ -108,7 +143,7 @@ async def test_execute_pool_raises_database_connection_error(pool_connection: Po
 
 
 @pytest.mark.asyncio
-async def test_execute_raises_query_error_on_postgres_error(db_manager: AsyncDatabaseManager, mocker):
+async def test_execute_raises_query_error_on_postgres_error(db_manager, mocker):
     mock_acquire = AsyncMock()
     mock_acquire.__aenter__.side_effect = InvalidSQLStatementNameError("Тестовая ошибка Postgres")
     mocker.patch.object(db_manager._pool, 'acquire', return_value=mock_acquire)
@@ -118,7 +153,7 @@ async def test_execute_raises_query_error_on_postgres_error(db_manager: AsyncDat
 
 
 @pytest.mark.asyncio
-async def test_execute_raises_query_error_on_timeout(db_manager: AsyncDatabaseManager, mocker):
+async def test_execute_raises_query_error_on_timeout(db_manager, mocker):
     mock_acquire = AsyncMock()
     mock_acquire.__aenter__.side_effect = TimeoutError("Тестовый таймаут")
     mocker.patch.object(db_manager._pool, 'acquire', return_value=mock_acquire)
@@ -128,7 +163,7 @@ async def test_execute_raises_query_error_on_timeout(db_manager: AsyncDatabaseMa
 
 
 @pytest.mark.asyncio
-async def test_execute_raises_unexpected_error(db_manager: AsyncDatabaseManager, mocker):
+async def test_execute_raises_unexpected_error(db_manager, mocker):
     mock_acquire = AsyncMock()
     mock_acquire.__aenter__.side_effect = Exception("Что-то совсем непредвиденное")
     mocker.patch.object(db_manager._pool, 'acquire', return_value=mock_acquire)
@@ -139,134 +174,191 @@ async def test_execute_raises_unexpected_error(db_manager: AsyncDatabaseManager,
 
 # --- Тесты для методов AsyncDatabaseManager
 @pytest.mark.asyncio
-async def test_upsert_and_get_mama_config(db_manager: AsyncDatabaseManager, bot_data: dict):
-    config_id = await db_manager.upsert_mama_config(
-        chat_id=bot_data['chat_id'],
-        bot_name=bot_data['bot_name'],
-        admin_id=bot_data['admin_id'],
-        timezone=bot_data['timezone'],
-        personality_prompt=None
-    )
-    retrieved_config = await db_manager.get_mama_config(bot_data['chat_id'])
+async def test_upsert_and_get_mama_config(db_manager, bot_data, cargo_bot_db):
+    bot = bot_data()
+    config_id = await cargo_bot_db(bot)
+    retrieved_config = await db_manager.get_mama_config(bot['chat_id'])
 
     assert config_id is not None
     assert isinstance(config_id, int)
     assert retrieved_config is not None
-    assert retrieved_config['chat_id'] == bot_data['chat_id']
-    assert retrieved_config['bot_name'] == bot_data['bot_name']
-    assert retrieved_config['admin_id'] == bot_data['admin_id']
-    assert retrieved_config['timezone'] == bot_data['timezone']
+    assert retrieved_config['chat_id'] == bot['chat_id']
+    assert retrieved_config['bot_name'] == bot['bot_name']
+    assert retrieved_config['admin_id'] == bot['admin_id']
+    assert retrieved_config['timezone'] == bot['timezone']
 
 
 @pytest.mark.asyncio
-async def test_get_all_mama_config(db_manager: AsyncDatabaseManager, bot_data: dict):
+async def test_get_all_mama_config(db_manager, bot_data, cargo_bot_db):
     chat_id = fake.random_number(digits=9)
-    chat_id_1 = fake.random_number(digits=9)
-
-    await db_manager.upsert_mama_config(
-        chat_id=chat_id,
-        bot_name=bot_data['bot_name'],
-        admin_id=bot_data['admin_id'],
-        timezone=bot_data['timezone'],
-        personality_prompt=None
-    )
-
-    await db_manager.upsert_mama_config(
-        chat_id=chat_id_1,
-        bot_name=bot_data['bot_name'],
-        admin_id=bot_data['admin_id'],
-        timezone=bot_data['timezone'],
-        personality_prompt=None
-    )
+    chat_id_0 = fake.random_number(digits=9)
+    bot = bot_data(chat_id=chat_id)
+    await cargo_bot_db(bot)
+    bot_0 = bot_data(chat_id=chat_id_0)
+    await cargo_bot_db(bot_0)
 
     retrieved_config = await db_manager.get_all_mama_configs()
-    chat_ids = [cfg["chat_id"] for cfg in retrieved_config]
+    chat_ids = [cfg['chat_id'] for cfg in retrieved_config]
 
     assert chat_id in chat_ids
-    assert chat_id_1 in chat_ids
+    assert chat_id_0 in chat_ids
 
 
 @pytest.mark.asyncio
-async def test_delete_mama_config(db_manager: AsyncDatabaseManager, bot_data: dict):
-    await db_manager.upsert_mama_config(
-        chat_id=bot_data['chat_id'],
-        bot_name=bot_data['bot_name'],
-        admin_id=bot_data['admin_id'],
-        timezone=bot_data['timezone'],
-        personality_prompt=None
-    )
+async def test_delete_mama_config(db_manager, bot_data, cargo_bot_db):
+    bot = bot_data()
+    await cargo_bot_db(bot)
 
     configs = await db_manager.get_all_mama_configs()
-    assert any(cfg["chat_id"] == bot_data['chat_id'] for cfg in configs)
+    assert any(cfg["chat_id"] == bot['chat_id'] for cfg in configs)
 
-    deleted_count = await db_manager.delete_mama_config(bot_data['chat_id'])
+    deleted_count = await db_manager.delete_mama_config(bot['chat_id'])
     assert deleted_count == 1
 
     configs_after = await db_manager.get_all_mama_configs()
-    assert all(cfg["chat_id"] != bot_data['chat_id'] for cfg in configs_after)
+    assert all(cfg["chat_id"] != bot['chat_id'] for cfg in configs_after)
 
 
 @pytest.mark.asyncio
-async def test_add_and_get_participant_and_set_child_and_get_child(db_manager: AsyncDatabaseManager, bot_data: dict,
-                                                                   participant_data: dict):
-    config_id = await db_manager.upsert_mama_config(
-        chat_id=bot_data['chat_id'],
-        bot_name=bot_data['bot_name'],
-        admin_id=bot_data['admin_id'],
-        timezone=bot_data['timezone'],
-        personality_prompt=None
-    )
-    participant_dict = await db_manager.add_participant(
-        config_id=config_id,
-        user_id=participant_data['user_id'],
-        custom_name=participant_data['custom_name'],
-        gender=participant_data['gender']
-    )
+async def test_add_and_get_participant_and_set_child_and_get_child(db_manager, bot_data, cargo_bot_db, participant_data,
+                                                                   cargo_participant_data):
+    bot = bot_data()
+    config_id = await cargo_bot_db(bot)
+    participant = participant_data(config_id=config_id)
+    participant_dict = await cargo_participant_data(participant)
     await db_manager.set_child(participant_dict['id'], config_id)
-    await db_manager.get_mama_config(bot_data['chat_id'])
+    await db_manager.get_mama_config(bot['chat_id'])
     child_dict = await db_manager.get_child(config_id)
-    retrieved_data_participant = await db_manager.get_participant(config_id, participant_data['user_id'])
+    retrieved_data_participant = await db_manager.get_participant(config_id, participant['user_id'])
 
     assert retrieved_data_participant is not None
     assert isinstance(retrieved_data_participant, dict)
     assert isinstance(retrieved_data_participant['id'], int)
-    assert retrieved_data_participant['custom_name'] == participant_data['custom_name']
-    assert retrieved_data_participant['gender'] == participant_data['gender']
+    assert retrieved_data_participant['custom_name'] == participant['custom_name']
+    assert retrieved_data_participant['gender'] == participant['gender']
     assert isinstance(retrieved_data_participant['relationship_score'], int)
     assert isinstance(retrieved_data_participant['is_ignored'], bool)
     assert retrieved_data_participant['last_interaction_at'] is None
     assert isinstance(child_dict, dict)
     assert isinstance(child_dict['id'], int)
-    assert child_dict['custom_name'] == participant_data['custom_name']
+    assert child_dict['custom_name'] == participant['custom_name']
 
 
 @pytest.mark.asyncio
-async def test_update_relationship_scope(db_manager: AsyncDatabaseManager, bot_data: dict,
-                                         participant_data: dict):
-    config_id = await db_manager.upsert_mama_config(
-        chat_id=bot_data['chat_id'],
-        bot_name=bot_data['bot_name'],
-        admin_id=bot_data['admin_id'],
-        timezone=bot_data['timezone'],
-        personality_prompt=None
-    )
-
-    participant_dict = await db_manager.add_participant(
-        config_id=config_id,
-        user_id=participant_data['user_id'],
-        custom_name=participant_data['custom_name'],
-        gender=participant_data['gender']
-    )
+async def test_update_relationship_scope(db_manager, bot_data, cargo_bot_db, participant_data,
+                                         cargo_participant_data):
+    bot = bot_data()
+    config_id = await cargo_bot_db(bot)
+    participant = participant_data(config_id=config_id)
+    participant_dict = await cargo_participant_data(participant)
 
     participant_id = participant_dict['id']
 
-    original_participant = await db_manager.get_participant(config_id, participant_data['user_id'])
+    original_participant = await db_manager.get_participant(config_id, participant['user_id'])
     original_score = original_participant['relationship_score']
 
     await db_manager.update_relationship_scope(participant_id, 10)
 
-    updated_participant = await db_manager.get_participant(config_id, participant_data['user_id'])
+    updated_participant = await db_manager.get_participant(config_id, participant['user_id'])
 
     assert updated_participant['relationship_score'] == original_score + 10
 
 
+@pytest.mark.asyncio
+async def test_update_personality_prompt(db_manager, bot_data, cargo_bot_db):
+    bot = bot_data()
+    config_id = await cargo_bot_db(bot)
+    test_prompt = fake.text(50)
+    await db_manager.update_personality_prompt(prompt=test_prompt, config_id=config_id)
+    retrieved_bot_data = await db_manager.get_mama_config(bot['chat_id'])
+
+    assert isinstance(retrieved_bot_data['personality_prompt'], str)
+    assert retrieved_bot_data['personality_prompt'] == test_prompt
+
+
+@pytest.mark.asyncio
+async def test_set_ignore_status(db_manager, bot_data, cargo_bot_db, participant_data, cargo_participant_data):
+    bot = bot_data()
+    config_id = await cargo_bot_db(bot)
+    participant = participant_data(config_id=config_id)
+    participant_dict = await cargo_participant_data(participant)
+
+    original_participant = await db_manager.get_participant(config_id, participant['user_id'])
+    original_score = original_participant['relationship_score']
+
+    await db_manager.set_ignore_status(participant_dict['id'], True)
+
+    updated_participant = await db_manager.get_participant(config_id, participant['user_id'])
+    assert updated_participant['relationship_score'] != original_score
+    assert updated_participant['relationship_score'] == 0
+
+
+@pytest.mark.asyncio
+async def test_add_message_log_and_get_message(db_manager, bot_data, cargo_bot_db, participant_data,
+                                               cargo_participant_data):
+    bot = bot_data()
+    config_id = await cargo_bot_db(bot)
+    participant = participant_data(config_id=config_id)
+    participant_dict = await cargo_participant_data(participant)
+
+    time_before_insert = datetime.now(timezone.utc)
+
+    message_time_from_db = await db_manager.add_message_log(
+        config_id=config_id,
+        participant_id=participant_dict['id'],
+        user_id=participant['user_id'],
+        message_text="Тестовый текст",
+        message_type='direct_mention'
+    )
+
+    time_before_insert = message_time_from_db - timedelta(seconds=1)
+    retrieved_messages = await db_manager.get_message_log_for_processing(config_id, time_before_insert)
+
+    assert retrieved_messages is not None
+    assert len(retrieved_messages) == 1
+    assert retrieved_messages[0]['message_text'] == "Тестовый текст"
+
+
+@pytest.mark.asyncio
+async def test_delete_processed_messages(db_manager, bot_data, cargo_bot_db, participant_data, cargo_participant_data):
+    bot = bot_data()
+    config_id = await cargo_bot_db(bot)
+    participant = participant_data(config_id=config_id)
+    participant_dict = await cargo_participant_data(participant)
+
+    message_time = await db_manager.add_message_log(
+        config_id=config_id,
+        participant_id=participant_dict['id'],
+        user_id=participant['user_id'],
+        message_text="Тестовое сообщение для удаления",
+        message_type='direct_mention'
+    )
+
+    messages = await db_manager.get_message_log_for_processing(config_id, message_time - timedelta(seconds=1))
+    assert len(messages) == 1
+
+    await db_manager.delete_processed_messages(config_id, datetime.now(timezone.utc))
+
+    messages_after = await db_manager.get_message_log_for_processing(config_id, message_time - timedelta(seconds=1))
+    assert len(messages_after) == 0
+
+
+@pytest.mark.asyncio
+async def test_add_and_get_long_term_memory(db_manager, bot_data, cargo_bot_db, participant_data,
+                                            cargo_participant_data):
+    bot = bot_data()
+    config_id = await cargo_bot_db(bot)
+    participant = participant_data(config_id=config_id)
+    participant_dict = await cargo_participant_data(participant)
+
+    test_memory = "Пользователь любит шоколадное мороженое"
+    await db_manager.add_long_term_memory(
+        participant_id=participant_dict['id'],
+        memory_summary=test_memory,
+        importance_level=3
+    )
+
+    memories = await db_manager.get_long_term_memory(participant_dict['id'], 5)
+
+    assert memories is not None
+    assert test_memory in memories['memory_summary']
