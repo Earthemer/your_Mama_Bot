@@ -4,7 +4,7 @@ from aiogram.fsm.context import FSMContext
 from aiogram.fsm.storage.base import StorageKey
 from aiogram.enums import ChatType
 
-from core.database import AsyncDatabaseManager
+from core.database.postgres_client import AsyncPostgresManager
 from core.llm_service import LLMManager
 
 from handlers.interactions import active_mode, waiting_mode, acquaintance
@@ -20,7 +20,7 @@ async def mama_listener_operator(
     message: types.Message,
     state: FSMContext,
     bot: Bot,
-    db: AsyncDatabaseManager,
+    db: AsyncPostgresManager,
     llm: LLMManager
 ):
     """

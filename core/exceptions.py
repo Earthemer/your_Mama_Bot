@@ -47,3 +47,7 @@ class AiogramError(CustomError):
 class SchedulerError(CustomError):
     """Ошибка при работе с AsyncIOScheduler."""
     pass
+
+class RedisConnectionError(CustomError):
+    """Ошибка при работе с Redis db."""
+    pass

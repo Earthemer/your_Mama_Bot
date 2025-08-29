@@ -57,4 +57,9 @@ POOL_PARAMETERS = {
 ACTIVE_MODE_DURATION_MINUTES = get_int_env('ACTIVE_MODE_DURATION_MINUTES', 10)
 CREATIVE_RESPONSES_LIMIT = get_int_env('CREATIVE_RESPONSES_LIMIT', 7)
 
+# ------- Faker -------
 fake = Faker("ru_RU")
+
+# ------- REDIS -------
+REDIS_HOST = get_str_env('REDIS_HOST', 'localhost')
+REDIS_PORT = get_int_env('REDIS_PORT', 6379)

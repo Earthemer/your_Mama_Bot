@@ -4,7 +4,7 @@ from aiogram import Router, F, types
 from aiogram.filters import CommandStart, Command, StateFilter
 from aiogram.fsm.context import FSMContext
 from aiogram.enums import ChatType
-from core.database import AsyncDatabaseManager
+from core.database.postgres_client import AsyncPostgresManager
 from core.exceptions import DatabaseConnectionError
 from keyboards.setup_kb import get_setup_keyboard
 
@@ -15,7 +15,7 @@ router = Router()
 
 @router.message(CommandStart(), StateFilter(None))
 @log_error
-async def handle_start(message: types.Message, db: AsyncDatabaseManager):
+async def handle_start(message: types.Message, db: AsyncPostgresManager):
     """Обрабатывает команду /start.
     Проверяет, есть ли конфигурация для этого чата."""
 
@@ -44,7 +44,7 @@ async def handle_start(message: types.Message, db: AsyncDatabaseManager):
 
 @router.message(Command('clean'))
 @log_error
-async def handle_clean(message: types.Message, db: AsyncDatabaseManager):
+async def handle_clean(message: types.Message, db: AsyncPostgresManager):
     """
     Обрабатывает команду /clean для сброса настроек бота в чате.
     Доступно только администраторам в группах.

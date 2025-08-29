@@ -7,8 +7,8 @@ from asyncpg import exceptions as error_database
 from datetime import datetime
 
 from core.logging_config import log_error
-from core.types import QueryMode
-from core.postgres_pool import PostgresPool
+from core.config.types import QueryMode
+from core.database.postgres_pool import PostgresPool
 from core.exceptions import (
     DatabaseConnectionError,
     DatabaseQueryError,
@@ -20,7 +20,7 @@ import core.sql_queries as queries
 logger = logging.getLogger(__name__)
 
 
-class AsyncDatabaseManager:
+class AsyncPostgresManager:
     """
     Управляет асинхронными запросами к базе данных для проекта "Твоя Мама",
     используя предоставленный пул соединений.

@@ -11,11 +11,10 @@ from keyboards.setup_kb import (
     get_gender_keyboard, get_personality_keyboard
 )
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
-from core.scheduler import add_chat_jobs_for_test
 from core.validation import MamaName
 from aiogram import Bot
 from core.llm_service import LLMManager
-from core.database import AsyncDatabaseManager
+from core.database.postgres_client import AsyncPostgresManager
 
 logger = logging.getLogger(__name__)
 router = Router()
@@ -70,7 +69,7 @@ async def get_mama_name(message: types.Message, state: FSMContext):
 
 @router.callback_query(SetupMama.getting_timezone, F.data.startswith("tz_"))
 @log_error
-async def get_timezone(callback: types.CallbackQuery, state: FSMContext, db: AsyncDatabaseManager):
+async def get_timezone(callback: types.CallbackQuery, state: FSMContext, db: AsyncPostgresManager):
     """ШАГ 3: Сохраняем часовой пояс."""
     if (data := await state.get_data()).get('admin_id') != callback.from_user.id:
         return await callback.answer("Настройку ведет другой админ.", show_alert=True)
@@ -136,7 +135,7 @@ async def get_child_name(message: types.Message, state: FSMContext):
 
 @router.callback_query(SetupMama.getting_child_gender, F.data.startswith("gender_"))
 @log_error
-async def set_gender(callback: types.CallbackQuery, state: FSMContext, db: AsyncDatabaseManager):
+async def set_gender(callback: types.CallbackQuery, state: FSMContext, db: AsyncPostgresManager):
     """ШАГ 6: Сохраняем ребенка."""
     if (data := await state.get_data()).get('admin_id') != callback.from_user.id:
         return await callback.answer("Настройку ведет другой админ.", show_alert=True)
@@ -166,7 +165,7 @@ async def set_gender(callback: types.CallbackQuery, state: FSMContext, db: Async
 @router.callback_query(SetupMama.getting_personality, F.data == "skip_personality")
 @log_error
 async def skip_personality(
-        callback: types.CallbackQuery, state: FSMContext, bot: Bot, db: AsyncDatabaseManager,
+        callback: types.CallbackQuery, state: FSMContext, bot: Bot, db: AsyncPostgresManager,
         scheduler: AsyncIOScheduler, llm: LLMManager
 ):
     """Пропуск черт личности."""
@@ -174,8 +173,6 @@ async def skip_personality(
         return await callback.answer("Настройку ведет другой админ.", show_alert=True)
 
     await callback.message.edit_text("Настройка завершена. Спасибо!")
-    if config := await db.get_mama_config(callback.message.chat.id):
-        add_chat_jobs_for_test(scheduler, bot, db, llm, config['chat_id'], config['timezone'])
     await state.clear()
     return None
 
@@ -194,7 +191,7 @@ async def ask_for_personality(callback: types.CallbackQuery, state: FSMContext):
 @router.message(SetupMama.getting_personality)
 @log_error
 async def save_personality(
-        message: types.Message, state: FSMContext, db: AsyncDatabaseManager,
+        message: types.Message, state: FSMContext, db: AsyncPostgresManager,
         llm: LLMManager, bot: Bot, scheduler: AsyncIOScheduler
 ):
     """Финальный шаг: сохраняем личность."""
@@ -218,8 +215,6 @@ async def save_personality(
 
     except LLMError as e:
         await message.answer("Ой, не могу сейчас это обдумать. Давай пока пропустим этот шаг.")
-        if config := await db.get_mama_config(message.chat.id):
-            add_chat_jobs_for_test(scheduler, bot, db, llm, config['chat_id'], config['timezone'])
         await state.clear()
         return
 
@@ -229,9 +224,6 @@ async def save_personality(
             prompt=message.text
         )
         await message.answer("Все записала! Настройка завершена. Спасибо!")
-
-        if config := await db.get_mama_config(message.chat.id):
-            add_chat_jobs_for_test(scheduler, bot, db, llm, config['chat_id'], config['timezone'])
 
     except Exception as e:
         logger.exception("Ошибка при сохранении личности")

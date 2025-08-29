@@ -7,12 +7,11 @@ from unittest.mock import AsyncMock
 from contextlib import asynccontextmanager
 from asyncpg import InvalidSQLStatementNameError
 from asyncio import TimeoutError
-
 from datetime import datetime, timedelta, timezone
 
 from core.config.parameters import TEST_DATABASE_URL, TEST_TABLES, fake
-from core.database import AsyncDatabaseManager
-from core.postgres_pool import PostgresPool
+from core.database.postgres_client import AsyncPostgresManager
+from core.database.postgres_pool import PostgresPool
 from core.exceptions import DatabaseConnectionError, DatabaseQueryError, UnexpectedError, PoolConnectionError
 
 
@@ -62,7 +61,7 @@ async def db_schema_setup(pool_connection: PostgresPool):
 
 @pytest_asyncio.fixture(scope='function')
 async def db_manager(pool_connection: PostgresPool):
-    manager = AsyncDatabaseManager(pool=pool_connection)
+    manager = AsyncPostgresManager(pool=pool_connection)
     return manager
 
 

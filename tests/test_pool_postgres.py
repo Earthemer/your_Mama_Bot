@@ -5,7 +5,7 @@ import asyncpg
 from typing import AsyncGenerator
 
 from core.config.parameters import TEST_DATABASE_URL
-from core.postgres_pool import PostgresPool
+from core.database.postgres_pool import PostgresPool
 from core.exceptions import PoolConnectionError
 
 
