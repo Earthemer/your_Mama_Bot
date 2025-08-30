@@ -14,8 +14,7 @@ from core.logging_config import setup_logging
 from core.database.postgres_pool import PostgresPool
 from core.database.redis_client import RedisClient
 
-from handlers import setup_dialog as setup_handlers
-from handlers import common as common_handlers
+from handlers.routers import common as common_handlers, setup_dialog as setup_handlers
 from handlers import operator
 
 setup_logging()

@@ -53,7 +53,7 @@ class PostgresPool:
                 else:
                     self._pool = None
                     self._is_connected = False
-                    raise PoolConnectionError(f"Попытка подключения {attempt + 1} провалилась: {e}ц") from e
+                    raise PoolConnectionError(f"Попытка подключения {attempt + 1} провалилась: {e}") from e
             except Exception as e:
                 if attempt < self.connect_retry_attempts - 1:
                     await asyncio.sleep(self.connect_retry_delay_seconds)
