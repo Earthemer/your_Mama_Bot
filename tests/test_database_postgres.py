@@ -123,7 +123,7 @@ def cargo_participant_data(db_manager):
 
 
 # --- Тесты ошибки в _execute
-@pytest.mark.asyncio
+
 async def test_execute_pool_raises_database_connection_error(pool_connection, db_manager):
     @asynccontextmanager
     async def fake_acquire(*args, **kwargs):
@@ -141,7 +141,7 @@ async def test_execute_pool_raises_database_connection_error(pool_connection, db
         pool_connection.acquire = original_acquire
 
 
-@pytest.mark.asyncio
+
 async def test_execute_raises_query_error_on_postgres_error(db_manager, mocker):
     mock_acquire = AsyncMock()
     mock_acquire.__aenter__.side_effect = InvalidSQLStatementNameError("Тестовая ошибка Postgres")
@@ -151,7 +151,7 @@ async def test_execute_raises_query_error_on_postgres_error(db_manager, mocker):
         await db_manager._execute("SELECT 1")
 
 
-@pytest.mark.asyncio
+
 async def test_execute_raises_query_error_on_timeout(db_manager, mocker):
     mock_acquire = AsyncMock()
     mock_acquire.__aenter__.side_effect = TimeoutError("Тестовый таймаут")
@@ -161,7 +161,7 @@ async def test_execute_raises_query_error_on_timeout(db_manager, mocker):
         await db_manager._execute("SELECT 1")
 
 
-@pytest.mark.asyncio
+
 async def test_execute_raises_unexpected_error(db_manager, mocker):
     mock_acquire = AsyncMock()
     mock_acquire.__aenter__.side_effect = Exception("Что-то совсем непредвиденное")
@@ -172,7 +172,7 @@ async def test_execute_raises_unexpected_error(db_manager, mocker):
 
 
 # --- Тесты для методов AsyncDatabaseManager
-@pytest.mark.asyncio
+
 async def test_upsert_and_get_mama_config(db_manager, bot_data, cargo_bot_db):
     bot = bot_data()
     config_id = await cargo_bot_db(bot)
@@ -187,7 +187,7 @@ async def test_upsert_and_get_mama_config(db_manager, bot_data, cargo_bot_db):
     assert retrieved_config['timezone'] == bot['timezone']
 
 
-@pytest.mark.asyncio
+
 async def test_get_all_mama_config(db_manager, bot_data, cargo_bot_db):
     chat_id = fake.random_number(digits=9)
     chat_id_0 = fake.random_number(digits=9)
@@ -203,7 +203,7 @@ async def test_get_all_mama_config(db_manager, bot_data, cargo_bot_db):
     assert chat_id_0 in chat_ids
 
 
-@pytest.mark.asyncio
+
 async def test_delete_mama_config(db_manager, bot_data, cargo_bot_db):
     bot = bot_data()
     await cargo_bot_db(bot)
@@ -218,7 +218,7 @@ async def test_delete_mama_config(db_manager, bot_data, cargo_bot_db):
     assert all(cfg["chat_id"] != bot['chat_id'] for cfg in configs_after)
 
 
-@pytest.mark.asyncio
+
 async def test_add_and_get_participant_and_set_child_and_get_child(db_manager, bot_data, cargo_bot_db, participant_data,
                                                                    cargo_participant_data):
     bot = bot_data()
@@ -243,7 +243,7 @@ async def test_add_and_get_participant_and_set_child_and_get_child(db_manager, b
     assert child_dict['custom_name'] == participant['custom_name']
 
 
-@pytest.mark.asyncio
+
 async def test_update_relationship_scope(db_manager, bot_data, cargo_bot_db, participant_data,
                                          cargo_participant_data):
     bot = bot_data()
@@ -263,7 +263,7 @@ async def test_update_relationship_scope(db_manager, bot_data, cargo_bot_db, par
     assert updated_participant['relationship_score'] == original_score + 10
 
 
-@pytest.mark.asyncio
+
 async def test_update_personality_prompt(db_manager, bot_data, cargo_bot_db):
     bot = bot_data()
     config_id = await cargo_bot_db(bot)
@@ -275,7 +275,7 @@ async def test_update_personality_prompt(db_manager, bot_data, cargo_bot_db):
     assert retrieved_bot_data['personality_prompt'] == test_prompt
 
 
-@pytest.mark.asyncio
+
 async def test_set_ignore_status(db_manager, bot_data, cargo_bot_db, participant_data, cargo_participant_data):
     bot = bot_data()
     config_id = await cargo_bot_db(bot)
@@ -292,7 +292,7 @@ async def test_set_ignore_status(db_manager, bot_data, cargo_bot_db, participant
     assert updated_participant['relationship_score'] == 0
 
 
-@pytest.mark.asyncio
+
 async def test_add_message_log_and_get_message(db_manager, bot_data, cargo_bot_db, participant_data,
                                                cargo_participant_data):
     bot = bot_data()
@@ -318,7 +318,7 @@ async def test_add_message_log_and_get_message(db_manager, bot_data, cargo_bot_d
     assert retrieved_messages[0]['message_text'] == "Тестовый текст"
 
 
-@pytest.mark.asyncio
+
 async def test_delete_processed_messages(db_manager, bot_data, cargo_bot_db, participant_data, cargo_participant_data):
     bot = bot_data()
     config_id = await cargo_bot_db(bot)
@@ -342,7 +342,6 @@ async def test_delete_processed_messages(db_manager, bot_data, cargo_bot_db, par
     assert len(messages_after) == 0
 
 
-@pytest.mark.asyncio
 async def test_add_and_get_long_term_memory(db_manager, bot_data, cargo_bot_db, participant_data,
                                             cargo_participant_data):
     bot = bot_data()
