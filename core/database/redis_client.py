@@ -1,6 +1,7 @@
 import logging
 import json
 
+
 from redis.asyncio import Redis, ConnectionPool
 from contextlib import asynccontextmanager
 
@@ -65,6 +66,21 @@ class RedisClient:
         return None
 
     @log_error
+    async def get_queue_size(self, queue_name: str) -> int:
+        """Возрващает текущий размер очереди."""
+        return await self._client.llen(queue_name)
+
+    @log_error
+    async def get_and_clear_batch(self, queue_name: str) -> list[dict]:
+        """Атомарно забирает все элементы из очереди и удаляет ее."""
+        async with self._client.pipeline(transaction=True) as pipe:
+            pipe.lrange(queue_name, 0, -1)
+            pipe.delete(queue_name)
+            raw_items, _ = await pipe.execute()
+
+        return [json.loads(item) for item in raw_items]
+
+    @log_error
     async def trim_queue(self, queue_name: str, max_len: int):
         """Обрезает очередь, оставляя последние max_len элементов."""
         await self._client.ltrim(queue_name, -max_len, -1)
@@ -81,6 +97,18 @@ class RedisClient:
     async def get_state(self, key: str) -> dict[str, str]:
         """Возвращает hash-объект."""
         return await self._client.hgetall(key)
+
+    @log_error
+    async def set_mode(self, config_id: int, mode: str):
+        """Устанавливает текущий режим работы для конкретного чата."""
+        key = f"mode:{config_id}"
+        await self._client.set(key, mode)
+
+    @log_error
+    async def get_mode(self, config_id: int) -> str | None:
+        """Получает текущий режим работы для чата."""
+        key = f"mode:{config_id}"
+        return await self._client.get(key)
 
     # ============ Флаги ============
     @log_error
@@ -101,25 +129,11 @@ class RedisClient:
         await self._client.delete(key)
 
     @log_error
-    async def set_mode(self, config_id: int, mode: str):
-        """Устанавливает текущий режим работы для конкретного чата."""
-        key = f"mode:{config_id}"
-        await self._client.set(key, mode)
-
-    @log_error
-    async def get_mode(self, config_id: int) -> str | None:
-        """Получает текущий режим работы для чата."""
-        key = f"mode:{config_id}"
-        return await self._client.get(key)
-
-    @log_error
-    async def get_queue_size(self, queue_name: str) -> int:
-        """Возвращает текущий размер очереди"""
-        return await self._client.llen(queue_name)
-
-    @log_error
-    async def get_and_clear_batch(self, queue_name: str) -> list[dict]:
-        """
-            Атомарно забирает все элементы из очереди (списка) и удаляет ее.
-            Возвращает список словарей.
-            """
+    async def increment_counter(self, key: str, ttl_seconds: int | None = None) -> int:
+        """Атомарно увеличивает счетчик и возвращает его новое значение."""
+        async with self._client.pipeline() as pipe:
+            pipe.incr(key)
+            if ttl_seconds:
+                pipe.expire(key, ttl_seconds, nx=True)
+            results = await pipe.execute()
+        return results[0]
