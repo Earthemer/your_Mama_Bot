@@ -1,4 +1,5 @@
 import logging
+import random
 
 from dotenv import load_dotenv
 from faker import Faker
@@ -63,3 +64,9 @@ fake = Faker("ru_RU")
 # ------- REDIS -------
 REDIS_HOST = get_str_env('REDIS_HOST', 'localhost')
 REDIS_PORT = get_int_env('REDIS_PORT', 6379)
+
+# ------- OPERATOR -------
+PASSIVE_MODE_CHANCE = get_int_env('PASSIVE_MODE_CHANCE', 20)
+ONLINE_MODE_REPLY_LIMIT = get_int_env('ONLINE_MODE_REPLY_LIMIT', 10)
+ONLINE_MODE_USER_COOLDOWN_SECONDS = get_int_env('ONLINE_MODE_USER_COOLDOWN_SECONDS', 60)
+ONLINE_MODE_BATCH_THRESHOLD = get_int_env('ONLINE_MODE_BATCH_THRESHOLD', 3)
