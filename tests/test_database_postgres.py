@@ -17,11 +17,13 @@ from core.exceptions import DatabaseConnectionError, DatabaseQueryError, Unexpec
 
 @pytest.fixture(scope='session')
 def db_dsn_test() -> str:
+    """Создает DSN для DB один раз за сессию."""
     return TEST_DATABASE_URL
 
 
 @pytest_asyncio.fixture(scope='function')
 async def pool_connection(db_dsn_test: str) -> AsyncGenerator[PostgresPool, None]:
+    """Предоставляет генератор с пулом Postgres."""
     pool_test = PostgresPool(dsn=db_dsn_test)
     await pool_test.create_pool()
     yield pool_test
@@ -31,6 +33,7 @@ async def pool_connection(db_dsn_test: str) -> AsyncGenerator[PostgresPool, None
 
 @pytest_asyncio.fixture(scope='function', autouse=True)
 async def db_schema_setup(pool_connection: PostgresPool):
+    """Извлекает и читает schema для разметки DB."""
     project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     schema_file_path = os.path.join(project_root, 'schema.sql')
     if not os.path.exists(schema_file_path):
@@ -61,12 +64,15 @@ async def db_schema_setup(pool_connection: PostgresPool):
 
 @pytest_asyncio.fixture(scope='function')
 async def db_manager(pool_connection: PostgresPool):
+    """Предоставляет асинхронный database_client для тестов."""
     manager = AsyncPostgresManager(pool=pool_connection)
     return manager
 
 
 @pytest_asyncio.fixture(scope='function')
 def bot_data():
+    """Сборщик данных для бота."""
+
     def _make_bot_data(**overrides):
         base = {
             'chat_id': fake.random_number(digits=9),
@@ -82,6 +88,8 @@ def bot_data():
 
 @pytest_asyncio.fixture(scope='function')
 def cargo_bot_db(db_manager):
+    """Фабрика для бота."""
+
     async def _insert_bot(bot: dict) -> int:
         return await db_manager.upsert_mama_config(
             chat_id=bot['chat_id'],
@@ -96,6 +104,8 @@ def cargo_bot_db(db_manager):
 
 @pytest_asyncio.fixture(scope='function')
 def participant_data():
+    """Сборщик данных для участника."""
+
     def _make_participant_data(**overrides):
         base = {
             'config_id': None,
@@ -111,6 +121,8 @@ def participant_data():
 
 @pytest_asyncio.fixture(scope='function')
 def cargo_participant_data(db_manager):
+    """Фабрика для участника."""
+
     async def _insert_cargo(data: dict) -> dict:
         return await db_manager.add_participant(
             config_id=data['config_id'],
@@ -141,7 +153,6 @@ async def test_execute_pool_raises_database_connection_error(pool_connection, db
         pool_connection.acquire = original_acquire
 
 
-
 async def test_execute_raises_query_error_on_postgres_error(db_manager, mocker):
     mock_acquire = AsyncMock()
     mock_acquire.__aenter__.side_effect = InvalidSQLStatementNameError("Тестовая ошибка Postgres")
@@ -151,7 +162,6 @@ async def test_execute_raises_query_error_on_postgres_error(db_manager, mocker):
         await db_manager._execute("SELECT 1")
 
 
-
 async def test_execute_raises_query_error_on_timeout(db_manager, mocker):
     mock_acquire = AsyncMock()
     mock_acquire.__aenter__.side_effect = TimeoutError("Тестовый таймаут")
@@ -159,7 +169,6 @@ async def test_execute_raises_query_error_on_timeout(db_manager, mocker):
 
     with pytest.raises(DatabaseQueryError, match="Операция с базой данных завершилась по таймауту."):
         await db_manager._execute("SELECT 1")
-
 
 
 async def test_execute_raises_unexpected_error(db_manager, mocker):
@@ -187,7 +196,6 @@ async def test_upsert_and_get_mama_config(db_manager, bot_data, cargo_bot_db):
     assert retrieved_config['timezone'] == bot['timezone']
 
 
-
 async def test_get_all_mama_config(db_manager, bot_data, cargo_bot_db):
     chat_id = fake.random_number(digits=9)
     chat_id_0 = fake.random_number(digits=9)
@@ -203,7 +211,6 @@ async def test_get_all_mama_config(db_manager, bot_data, cargo_bot_db):
     assert chat_id_0 in chat_ids
 
 
-
 async def test_delete_mama_config(db_manager, bot_data, cargo_bot_db):
     bot = bot_data()
     await cargo_bot_db(bot)
@@ -216,7 +223,6 @@ async def test_delete_mama_config(db_manager, bot_data, cargo_bot_db):
 
     configs_after = await db_manager.get_all_mama_configs()
     assert all(cfg["chat_id"] != bot['chat_id'] for cfg in configs_after)
-
 
 
 async def test_add_and_get_participant_and_set_child_and_get_child(db_manager, bot_data, cargo_bot_db, participant_data,
@@ -243,7 +249,6 @@ async def test_add_and_get_participant_and_set_child_and_get_child(db_manager, b
     assert child_dict['custom_name'] == participant['custom_name']
 
 
-
 async def test_update_relationship_scope(db_manager, bot_data, cargo_bot_db, participant_data,
                                          cargo_participant_data):
     bot = bot_data()
@@ -263,7 +268,6 @@ async def test_update_relationship_scope(db_manager, bot_data, cargo_bot_db, par
     assert updated_participant['relationship_score'] == original_score + 10
 
 
-
 async def test_update_personality_prompt(db_manager, bot_data, cargo_bot_db):
     bot = bot_data()
     config_id = await cargo_bot_db(bot)
@@ -273,7 +277,6 @@ async def test_update_personality_prompt(db_manager, bot_data, cargo_bot_db):
 
     assert isinstance(retrieved_bot_data['personality_prompt'], str)
     assert retrieved_bot_data['personality_prompt'] == test_prompt
-
 
 
 async def test_set_ignore_status(db_manager, bot_data, cargo_bot_db, participant_data, cargo_participant_data):
@@ -290,7 +293,6 @@ async def test_set_ignore_status(db_manager, bot_data, cargo_bot_db, participant
     updated_participant = await db_manager.get_participant(config_id, participant['user_id'])
     assert updated_participant['relationship_score'] != original_score
     assert updated_participant['relationship_score'] == 0
-
 
 
 async def test_add_message_log_and_get_message(db_manager, bot_data, cargo_bot_db, participant_data,
@@ -316,7 +318,6 @@ async def test_add_message_log_and_get_message(db_manager, bot_data, cargo_bot_d
     assert retrieved_messages is not None
     assert len(retrieved_messages) == 1
     assert retrieved_messages[0]['message_text'] == "Тестовый текст"
-
 
 
 async def test_delete_processed_messages(db_manager, bot_data, cargo_bot_db, participant_data, cargo_participant_data):

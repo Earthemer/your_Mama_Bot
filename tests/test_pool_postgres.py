@@ -13,14 +13,17 @@ from core.exceptions import PoolConnectionError
 
 @pytest.fixture(scope='session')
 def db_dsn_test() -> str:
+    """Создает DSN для DB один раз за сессию."""
     return TEST_DATABASE_URL
 
 @pytest_asyncio.fixture(scope='function')
 async def clean_pg_pool(db_dsn_test: str) -> PostgresPool:
+    """Предоставляет объект PostgresPool для тестов."""
     return PostgresPool(dsn=db_dsn_test)
 
 @pytest_asyncio.fixture(scope='function')
 async def ready_pg_pool(db_dsn_test: str) -> AsyncGenerator[PostgresPool, None]:
+    """Предоставляет готовый к работе PostgresPool для тестов."""
     pool_test = PostgresPool(dsn=db_dsn_test)
     await pool_test.create_pool()
     yield pool_test
