@@ -10,7 +10,7 @@ from core.config.parameters import (
     ONLINE_MODE_USER_COOLDOWN_SECONDS,
     ONLINE_MODE_BATCH_THRESHOLD
 )
-from handlers.brain_service import BrainService
+from core.brain_service import BrainService
 
 logger = logging.getLogger(__name__)
 

@@ -8,8 +8,8 @@ from typing import Any, AsyncGenerator
 from aiogram import types
 
 from core.config.parameters import ONLINE_MODE_BATCH_THRESHOLD, ONLINE_MODE_REPLY_LIMIT
-from handlers.brain_service import BrainService
-from handlers.operator import Operator
+from core.brain_service import BrainService
+from core.operator import Operator
 from core.database.redis_client import RedisClient
 
 
@@ -223,7 +223,7 @@ async def test_passive_mention_with_successful_roll(
         operator, redis_client, brain_service_mock, mocker, test_config, test_participant, direct_mention_message
 ):
     await redis_client.set_mode(test_config['id'], 'PASSIVE')
-    mocker.patch('handlers.operator.random.randint', return_value=1)
+    mocker.patch('core.operator.random.randint', return_value=1)
 
     await operator.handle_message(direct_mention_message, test_config, test_participant)
 
@@ -235,7 +235,7 @@ async def test_passive_mention_with_failed_roll(
         operator, redis_client, brain_service_mock, mocker, test_config, test_participant, direct_mention_message
 ):
     await redis_client.set_mode(test_config['id'], 'PASSIVE')
-    mocker.patch('handlers.operator.random.randint', return_value=100)
+    mocker.patch('core.operator.random.randint', return_value=100)
 
     await operator.handle_message(direct_mention_message, test_config, test_participant)
     assert await redis_client.get_queue_size(f"direct_queue:{test_config['id']}") == 0
