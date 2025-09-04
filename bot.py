@@ -9,7 +9,7 @@ from core.config.parameters import (
 )
 
 from core.database.postgres_client import AsyncPostgresManager
-from core.llm_service import LLMManager
+from core.llm_manager import LLMManager
 from core.logging_config import setup_logging
 from core.database.postgres_pool import PostgresPool
 from core.database.redis_client import RedisClient

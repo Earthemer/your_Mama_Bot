@@ -44,7 +44,7 @@ class LLMManager:
         logger.debug("LLManager инициализирован.")
 
     @log_error
-    async def get_response(self, prompt: str) -> str:
+    async def get_raw_response(self, prompt: str) -> str:
         """Отправляет промт в LLM и возрващает текстовый ответ. """
         try:
             response = await to_thread(

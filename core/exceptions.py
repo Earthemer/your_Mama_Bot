@@ -51,3 +51,5 @@ class SchedulerError(CustomError):
 class RedisConnectionError(CustomError):
     """Ошибка при работе с Redis db."""
     pass
+
+

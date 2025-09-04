@@ -13,7 +13,7 @@ from keyboards.setup_kb import (
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from core.validation import MamaName
 from aiogram import Bot
-from core.llm_service import LLMManager
+from core.llm_manager import LLMManager
 from core.database.postgres_client import AsyncPostgresManager
 
 logger = logging.getLogger(__name__)
