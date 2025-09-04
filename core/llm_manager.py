@@ -32,10 +32,12 @@ GENERATION_CONFIG = types.GenerateContentConfig(
     ]
 )
 
+
 class LLMManager:
     """
     Управляет взаимодействием с LLM.
     """
+
     def __init__(self, api_key: str):
         if not api_key:
             raise ValueError("API ключ не предоставлен!")
@@ -58,5 +60,7 @@ class LLMManager:
                 raise LLMError("Модель не вернула текстовый ответ.")
             return response.text
 
+        except LLMError:
+            raise
         except Exception as e:
-            raise LLMError("Не удалось получить ответ от нейросети.")
+            raise LLMError("Не удалось получить ответ от нейросети.") from e

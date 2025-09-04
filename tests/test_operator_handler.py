@@ -14,7 +14,7 @@ from core.database.redis_client import RedisClient
 
 
 # фикстуры
-@pytest_asyncio.fixture(scope='function')
+@pytest_asyncio.fixture
 async def redis_client() -> AsyncGenerator[RedisClient, Any]:
     """
     Создает RedisClient, привязанный к fake Redis.
@@ -31,7 +31,7 @@ async def redis_client() -> AsyncGenerator[RedisClient, Any]:
     await client._client.flushdb()
 
 
-@pytest.fixture(scope="function")
+@pytest.fixture
 def brain_service_mock() -> MagicMock:
     """Создаём мок BrainService напрямую."""
     instance = MagicMock(spec=BrainService)
@@ -47,7 +47,7 @@ def operator(redis_client, brain_service_mock) -> Operator:
     return Operator(redis_client, brain_service_mock)
 
 
-@pytest.fixture(scope="session")
+@pytest.fixture
 def test_config() -> dict:
     """Возвращает стандартный словарь конфигурации."""
     return {
@@ -58,7 +58,7 @@ def test_config() -> dict:
     }
 
 
-@pytest.fixture(scope="session")
+@pytest.fixture
 def test_participant() -> dict:
     """Возвращает стандартный словарь участника."""
     return {
@@ -69,7 +69,7 @@ def test_participant() -> dict:
     }
 
 
-@pytest.fixture(scope="session")
+@pytest.fixture
 def test_child_participant() -> dict:
     """Возвращает словарь участника, который является 'ребенком'."""
     return {

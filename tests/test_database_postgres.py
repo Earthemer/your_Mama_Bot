@@ -21,7 +21,7 @@ def db_dsn_test() -> str:
     return TEST_DATABASE_URL
 
 
-@pytest_asyncio.fixture(scope='function')
+@pytest_asyncio.fixture
 async def pool_connection(db_dsn_test: str) -> AsyncGenerator[PostgresPool, None]:
     """Предоставляет генератор с пулом Postgres."""
     pool_test = PostgresPool(dsn=db_dsn_test)
@@ -62,14 +62,14 @@ async def db_schema_setup(pool_connection: PostgresPool):
         print(f"Ошибка очистки схемы БД (teardown): {e}")
 
 
-@pytest_asyncio.fixture(scope='function')
+@pytest_asyncio.fixture
 async def db_manager(pool_connection: PostgresPool):
     """Предоставляет асинхронный database_client для тестов."""
     manager = AsyncPostgresManager(pool=pool_connection)
     return manager
 
 
-@pytest_asyncio.fixture(scope='function')
+@pytest_asyncio.fixture
 def bot_data():
     """Сборщик данных для бота."""
 
@@ -86,7 +86,7 @@ def bot_data():
     return _make_bot_data
 
 
-@pytest_asyncio.fixture(scope='function')
+@pytest_asyncio.fixture
 def cargo_bot_db(db_manager):
     """Фабрика для бота."""
 
@@ -102,7 +102,7 @@ def cargo_bot_db(db_manager):
     return _insert_bot
 
 
-@pytest_asyncio.fixture(scope='function')
+@pytest_asyncio.fixture
 def participant_data():
     """Сборщик данных для участника."""
 
@@ -119,7 +119,7 @@ def participant_data():
     return _make_participant_data
 
 
-@pytest_asyncio.fixture(scope='function')
+@pytest_asyncio.fixture
 def cargo_participant_data(db_manager):
     """Фабрика для участника."""
 
