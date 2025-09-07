@@ -25,6 +25,12 @@ FROM mama_configs
 WHERE chat_id = $1;
 """
 
+GET_MAMA_CONFIG_BY_ID = """
+SELECT id, chat_id, bot_name, admin_id, child_participant_id, timezone, personality_prompt
+FROM mama_configs
+WHERE id = $1;
+"""
+
 GET_ALL_MAMA_CONFIGS = """
 SELECT id, chat_id, bot_name, admin_id, child_participant_id, timezone, personality_prompt 
 FROM mama_configs;
@@ -50,6 +56,12 @@ GET_PARTICIPANT = """
 SELECT id, custom_name, gender, relationship_score, is_ignored, last_interaction_at
 FROM participants
 WHERE config_id = $1 AND user_id = $2;
+"""
+
+GET_ALL_PARTICIPANTS_BY_CONFIG_ID = """
+SELECT id, user_id, custom_name, gender, relationship_score
+FROM participants
+WHERE config_id = $1 AND is_ignored = false;
 """
 
 GET_CHILD = """

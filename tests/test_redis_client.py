@@ -106,3 +106,24 @@ async def test_increment_counter(redis_client: RedisClient):
     value2 = await redis_client.increment_counter(key)
     assert value1 == 1
     assert value2 == 2
+
+async def test_set_and_get_json(redis_client: RedisClient):
+    key = "json:test"
+    data = {"user": "Alice", "score": 100}
+
+    # Сохраняем словарь в Redis
+    await redis_client.set_json(key, data, ttl_seconds=60)
+
+    # Достаём обратно
+    retrieved = await redis_client.get_json(key)
+
+    assert retrieved is not None
+    assert isinstance(retrieved, dict)
+    assert retrieved == data
+
+async def test_get_json_missing_key(redis_client: RedisClient):
+    key = "json:missing"
+
+    # Если ключа нет, должно вернуть None
+    result = await redis_client.get_json(key)
+    assert result is None

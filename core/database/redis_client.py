@@ -137,3 +137,16 @@ class RedisClient:
                 pipe.expire(key, ttl_seconds, nx=True)
             results = await pipe.execute()
         return results[0]
+
+    @log_error
+    async def set_json(self, key: str, data: dict, ttl_seconds: int | None = None):
+        """Сериализует dict в JSON и сохраняет в Redis."""
+        await self._client.set(key, json.dumps(data), ex=ttl_seconds)
+
+    @log_error
+    async def get_json(self, key: str) -> dict | None:
+        """Получает строку из Redis и десериализует ее из JSON."""
+        raw_data = await self._client.get(key)
+        if raw_data:
+            return json.loads(raw_data)
+        return None

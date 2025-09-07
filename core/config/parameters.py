@@ -64,6 +64,7 @@ fake = Faker("ru_RU")
 # ------- REDIS -------
 REDIS_HOST = get_str_env('REDIS_HOST', 'localhost')
 REDIS_PORT = get_int_env('REDIS_PORT', 6379)
+CONFIG_CACHE_TTL = get_int_env('CONFIG_CACHE_TTL', 3600)
 
 # ------- OPERATOR -------
 PASSIVE_MODE_CHANCE = get_int_env('PASSIVE_MODE_CHANCE', 20)

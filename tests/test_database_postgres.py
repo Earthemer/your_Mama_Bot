@@ -196,6 +196,20 @@ async def test_upsert_and_get_mama_config(db_manager, bot_data, cargo_bot_db):
     assert retrieved_config['timezone'] == bot['timezone']
 
 
+async def test_get_mama_config_by_id(db_manager, bot_data, cargo_bot_db):
+    bot = bot_data()
+    config_id = await cargo_bot_db(bot)
+    retrieved_config = await db_manager.get_mama_config_by_id(config_id)
+
+    assert config_id is not None
+    assert isinstance(config_id, int)
+    assert retrieved_config is not None
+    assert retrieved_config['chat_id'] == bot['chat_id']
+    assert retrieved_config['bot_name'] == bot['bot_name']
+    assert retrieved_config['admin_id'] == bot['admin_id']
+    assert retrieved_config['timezone'] == bot['timezone']
+
+
 async def test_get_all_mama_config(db_manager, bot_data, cargo_bot_db):
     chat_id = fake.random_number(digits=9)
     chat_id_0 = fake.random_number(digits=9)
@@ -247,6 +261,36 @@ async def test_add_and_get_participant_and_set_child_and_get_child(db_manager, b
     assert isinstance(child_dict, dict)
     assert isinstance(child_dict['id'], int)
     assert child_dict['custom_name'] == participant['custom_name']
+
+
+@pytest.mark.asyncio
+async def test_get_all_participants_by_config_id(db_manager, bot_data, cargo_bot_db, participant_data,
+                                                 cargo_participant_data):
+    bot = bot_data()
+    config_id = await cargo_bot_db(bot)
+
+    participant1 = participant_data(config_id=config_id)
+    participant2 = participant_data(config_id=config_id)
+
+    participant_dict1 = await cargo_participant_data(participant1)
+    participant_dict2 = await cargo_participant_data(participant2)
+
+    participants = await db_manager.get_all_participants_by_config_id(config_id)
+
+    assert isinstance(participants, list)
+    assert len(participants) >= 2
+
+    ids = [p['id'] for p in participants]
+    assert participant_dict1['id'] in ids
+    assert participant_dict2['id'] in ids
+
+    for p in participants:
+        assert isinstance(p, dict)
+        assert isinstance(p['id'], int)
+        assert isinstance(p['user_id'], int)
+        assert isinstance(p['custom_name'], str)
+        assert isinstance(p['gender'], str)
+        assert isinstance(p['relationship_score'], int)
 
 
 async def test_update_relationship_scope(db_manager, bot_data, cargo_bot_db, participant_data,

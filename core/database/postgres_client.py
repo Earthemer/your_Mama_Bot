@@ -110,7 +110,7 @@ class AsyncPostgresManager:
         return config_id
 
     async def get_mama_config(self, chat_id: int) -> dict | None:
-        """Получает активную конфигурацию для бота из конкретного чата."""
+        """Получает активную конфигурацию для бота по chat_id."""
         logger.debug(f"Запрос конфигурации для чата {chat_id}...")
         config_dict = await self._execute(
             queries.GET_MAMA_CONFIG,
@@ -122,6 +122,21 @@ class AsyncPostgresManager:
             return config_dict
         else:
             logger.debug(f"Активная конфигурация для чата {chat_id} не найдена.")
+            return None
+
+    async def get_mama_config_by_id(self, config_id: int):
+        """Получается все информацию о боте по id из db."""
+        logger.debug(f"Запрос конфигурации для чата {config_id}...")
+        config_dict = await self._execute(
+            queries.GET_MAMA_CONFIG_BY_ID,
+            params=(config_id,),
+            mode='fetch_row'
+        )
+        if config_dict:
+            logger.debug(f"Конфигурация для чата {config_id} найдена.")
+            return config_dict
+        else:
+            logger.debug(f"Активная конфигурация для чата {config_id} не найдена.")
             return None
 
     async def get_all_mama_configs(self) -> list[dict]:
@@ -170,6 +185,14 @@ class AsyncPostgresManager:
     async def get_participant(self, config_id: int, user_id: int) -> dict | None:
         """Получает полную информацию об участнике по его Telegram ID."""
         return await self._execute(queries.GET_PARTICIPANT, params=(config_id, user_id), mode='fetch_row')
+
+    async def get_all_participants_by_config_id(self, config_id: int) -> list[dict]:
+        """Получает СПИСОК ВСЕХ активных участников для указанной конфигурации."""
+        return await self._execute(
+            queries.GET_ALL_PARTICIPANTS_BY_CONFIG_ID,
+            params=(config_id,),
+            mode='fetch_all'
+        )
 
     async def get_child(self, config_id: int) -> dict | None:
         """Получается ID и имя ребенка для текущей мамы."""
