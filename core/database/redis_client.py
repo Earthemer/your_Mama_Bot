@@ -150,3 +150,13 @@ class RedisClient:
         if raw_data:
             return json.loads(raw_data)
         return None
+
+    @log_error
+    async def set_string(self, key: str, value: str, ttl_seconds: int | None = None):
+        """Сохраняет строковое значение в Redis."""
+        await self._client.set(key, value, ex=ttl_seconds)
+
+    @log_error
+    async def get_string(self, key: str) -> str | None:
+        """Возвращает строковое значение из Redis (или None)."""
+        return await self._client.get(key)

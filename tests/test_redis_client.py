@@ -127,3 +127,25 @@ async def test_get_json_missing_key(redis_client: RedisClient):
     # Если ключа нет, должно вернуть None
     result = await redis_client.get_json(key)
     assert result is None
+
+async def test_set_and_get_string(redis_client: RedisClient):
+    key = "string:test"
+    value = "hello world"
+
+    # Сохраняем строку
+    await redis_client.set_string(key, value, ttl_seconds=60)
+
+    # Достаём обратно
+    result = await redis_client.get_string(key)
+
+    assert result is not None
+    assert isinstance(result, str)
+    assert result == value
+
+
+async def test_get_string_missing_key(redis_client: RedisClient):
+    key = "string:missing"
+
+    # Если ключа нет, должно вернуть None
+    result = await redis_client.get_string(key)
+    assert result is None
