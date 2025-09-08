@@ -75,17 +75,22 @@ class SchedulerManager:
 
         def schedule_cycle(hour: int, minute: int, duration: int, label: str):
             """Хелпер для планирования одного полного цикла 'сбор + онлайн'."""
-            gathering_time = datetime.now(timezone).replace(hour=hour, minute=minute, second=0, microsecond=0)
+            jitter_seconds = random.randint(0, 59)
+            gathering_time = datetime.now(timezone).replace(
+                hour=hour, minute=minute, second=jitter_seconds, microsecond=0
+            )
             online_start_time = gathering_time + timedelta(minutes=GATHERING_DURATION_MINUTES)
-
             self.scheduler.add_job(
                 self._run_gathering_start,
-                trigger="cron", hour=gathering_time.hour, minute=gathering_time.minute, timezone=timezone,
+                trigger="cron", hour=gathering_time.hour, minute=gathering_time.minute, second=gathering_time.second,
+                timezone=timezone,
                 args=[config_id, label], id=f"gathering_{label}_{config_id}", replace_existing=True
             )
             self.scheduler.add_job(
                 self._run_processing_and_online_start,
-                trigger="cron", hour=online_start_time.hour, minute=online_start_time.minute, timezone=timezone,
+                trigger="cron", hour=online_start_time.hour, minute=online_start_time.minute,
+                second=online_start_time.second,
+                timezone=timezone,
                 args=[config_id, label, duration, timezone], id=f"online_{label}_{config_id}", replace_existing=True
             )
 

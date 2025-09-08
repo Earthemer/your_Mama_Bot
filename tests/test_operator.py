@@ -33,7 +33,7 @@ async def redis_client() -> AsyncGenerator[RedisClient, Any]:
 
 @pytest.fixture
 def brain_service_mock() -> MagicMock:
-    """Создаём мок BrainService напрямую."""
+    """Мок BrainService."""
     instance = MagicMock(spec=BrainService)
     instance.process_single_message_immediately = AsyncMock()
     instance.process_online_batch = AsyncMock()
@@ -54,7 +54,8 @@ def test_config() -> dict:
         "id": 1,
         "chat_id": -100123456789,
         "bot_name": "Мама",
-        "child_participant_id": 10
+        "child_participant_id": 10,
+        "timezone": "UTC",
     }
 
 
