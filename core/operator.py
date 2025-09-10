@@ -23,38 +23,6 @@ class Operator:
         self.brain = brain_service
         logger.info("Operator инициализирован.")
 
-    @staticmethod
-    @log_error
-    def _is_direct_mention(message: types.Message, bot_name: str) -> bool:
-        """Проверяет, является ли сообщение прямым упоминаниемю."""
-        if not message.text:
-            return False
-        if message.reply_to_message and message.reply_to_message.from_user.is_bot:
-            return True
-        if bot_name.lower() in message.text.lower():
-            return True
-        return False
-
-    @staticmethod
-    @log_error
-    def _is_child(config: dict, participant: dict | None) -> bool:
-        """Проверяет, является ли автор сообщение 'ребенком'."""
-        if not participant:
-            return False
-        return participant['id'] == config.get('child_participant_id')
-
-    @staticmethod
-    @log_error
-    def _create_payload(message: types.Message, participant: dict | None) -> dict:
-        """Создает стандартизированный dict для отправки в очередь."""
-        return {
-            "user_id": message.from_user.id,
-            "chat_id": message.chat.id,
-            "text": message.text,
-            "timestamp": message.date.timestamp(),
-            "participant_info": participant
-        }
-
     @log_error
     async def handle_message(
             self,
@@ -104,7 +72,7 @@ class Operator:
         if self._is_direct_mention(message, config['bot_name']):
             if random.randint(1, 100) <= PASSIVE_MODE_CHANCE:
                 logger.debug(f"Кубик в PASSIVE режиме сработал. Запускаем немедленную обработку.")
-                await self.brain.process_single_message_immediately(message, config, participant)
+                await self.brain.process_single_message_immediately(message, config)
             else:
                 logger.debug("Кубик в PASSIVE режиме НЕ сработал. Сообщение проигнорировано.")
 
@@ -136,11 +104,34 @@ class Operator:
             logger.info(f"Микро-пакет достиг размера {batch_size}. Запускаем обработку.")
             await self.brain.process_online_batch(config['id'])
 
+    @staticmethod
+    @log_error
+    def _is_direct_mention(message: types.Message, bot_name: str) -> bool:
+        """Проверяет, является ли сообщение прямым упоминанием."""
+        if not message.text:
+            return False
+        if message.reply_to_message and message.reply_to_message.from_user.is_bot:
+            return True
+        if bot_name.lower() in message.text.lower():
+            return True
+        return False
 
+    @staticmethod
+    @log_error
+    def _is_child(config: dict, participant: dict | None) -> bool:
+        """Проверяет, является ли автор сообщение 'ребенком'."""
+        if not participant:
+            return False
+        return participant['id'] == config.get('child_participant_id')
 
-
-
-
-
-
-
+    @staticmethod
+    @log_error
+    def _create_payload(message: types.Message, participant: dict | None) -> dict:
+        """Создает стандартизированный dict для отправки в очередь."""
+        return {
+            "user_id": message.from_user.id,
+            "chat_id": message.chat.id,
+            "text": message.text,
+            "timestamp": message.date.timestamp(),
+            "participant_info": participant
+        }

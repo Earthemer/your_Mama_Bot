@@ -198,7 +198,7 @@ class AsyncPostgresManager:
         """Получается ID и имя ребенка для текущей мамы."""
         return await self._execute(queries.GET_CHILD, params=(config_id,), mode='fetch_row')
 
-    async def update_relationship_scope(self, participant_id: int, score_change: int) -> None:
+    async def update_relationship_score(self, participant_id: int, score_change: int) -> None:
         """Обновляет только репутацию участника."""
         await self._execute(queries.UPDATE_RELATIONSHIP_SCORE, params=(score_change, participant_id), mode='execute')
 

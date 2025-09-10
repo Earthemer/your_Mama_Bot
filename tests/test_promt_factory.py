@@ -1,5 +1,5 @@
 import pytest
-from core.prompt_factory import PromptFactory, Participant, Message
+from core.prompt_factory import PromptFactory
 
 
 # ---- Фикстуры
@@ -22,7 +22,7 @@ def test_config() -> dict:
 
 
 @pytest.fixture(scope="session")
-def test_participants() -> list[Participant]:
+def test_participants() -> list[dict]:
     """Фикстура со списком известных участников."""
     return [
         {
@@ -41,7 +41,7 @@ def test_participants() -> list[Participant]:
 
 
 @pytest.fixture(scope="session")
-def test_messages() -> list[Message]:
+def test_messages() -> list[dict]:
     """
     Фикстура со списком сообщений:
     - Одно от известного участника.
@@ -64,8 +64,8 @@ def test_messages() -> list[Message]:
 def test_create_gathering_prompt_full_data(
         prompt_factory: PromptFactory,
         test_config: dict,
-        test_participants: list[Participant],
-        test_messages: list[Message]
+        test_participants: list[dict],
+        test_messages: list[dict]
 ):
     prompt = prompt_factory.create_gathering_prompt(
         config=test_config,

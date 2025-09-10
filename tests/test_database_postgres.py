@@ -305,7 +305,7 @@ async def test_update_relationship_scope(db_manager, bot_data, cargo_bot_db, par
     original_participant = await db_manager.get_participant(config_id, participant['user_id'])
     original_score = original_participant['relationship_score']
 
-    await db_manager.update_relationship_scope(participant_id, 10)
+    await db_manager.update_relationship_score(participant_id, 10)
 
     updated_participant = await db_manager.get_participant(config_id, participant['user_id'])
 
@@ -345,8 +345,6 @@ async def test_add_message_log_and_get_message(db_manager, bot_data, cargo_bot_d
     config_id = await cargo_bot_db(bot)
     participant = participant_data(config_id=config_id)
     participant_dict = await cargo_participant_data(participant)
-
-    time_before_insert = datetime.now(timezone.utc)
 
     message_time_from_db = await db_manager.add_message_log(
         config_id=config_id,

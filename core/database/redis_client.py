@@ -4,6 +4,7 @@ import json
 
 from redis.asyncio import Redis, ConnectionPool
 from contextlib import asynccontextmanager
+from typing import Any
 
 from core.exceptions import RedisConnectionError
 from core.logging_config import log_error
@@ -139,8 +140,8 @@ class RedisClient:
         return results[0]
 
     @log_error
-    async def set_json(self, key: str, data: dict, ttl_seconds: int | None = None):
-        """Сериализует dict в JSON и сохраняет в Redis."""
+    async def set_json(self, key: str, data: Any, ttl_seconds: int | None = None):
+        """Сериализует любой JSON-сериализуемый объект и сохраняет в Redis."""
         await self._client.set(key, json.dumps(data), ex=ttl_seconds)
 
     @log_error
