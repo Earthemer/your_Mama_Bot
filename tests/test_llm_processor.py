@@ -1,55 +1,116 @@
 import pytest
-from unittest.mock import MagicMock, AsyncMock
+from unittest.mock import AsyncMock, MagicMock
 
-from core.llm.llm_manager import LLMManager
-from core.config.exceptions import LLMError
+from core.llm.llm_processor import LLMProcessor, LLMResponse, LLMError
+from core.llm.base_llm_client import BaseLLMClient
+from core.config.parameters import Prompt, SessionId
+
 
 # ---- Фикстуры
-@pytest.fixture
-def llm_manager() -> LLMManager:
-    """Создает инстанс LLMManager с фейковым API-ключом для тестов."""
-    return LLMManager(api_key='fake-api-key')
-
 
 @pytest.fixture
-def mock_genai_client(mocker) -> MagicMock:
-    """
-    Мокает клиент google-genai, чтобы избежать реальных API-вызовов.
-    Возвращает сам мок клиента для дальнейшей настройки в тестах.
-    """
-    mock_client = mocker.patch('core.llm_manager.genai.Client')
-    return mock_client
+def mock_client() -> MagicMock:
+    """Мок клиента BaseLLMClient с асинхронными методами."""
+    client = MagicMock(spec=BaseLLMClient)
+    client.generate_single = AsyncMock()
+    client.start_session = AsyncMock()
+    client.send_in_session = AsyncMock()
+    client.end_session = AsyncMock()
+    return client
 
-# ---- Тесты
 
-@pytest.mark.asyncio
-async def test_get_raw_response_success(llm_manager: LLMManager, mocker: MagicMock):
-    expected_text = "Это тестовый ответ от LLM."
-    mock_response = MagicMock()
-    mock_response.text = expected_text
+@pytest.fixture
+def llm_processor(mock_client: MagicMock) -> LLMProcessor:
+    """Инстанс LLMProcessor с замоканным клиентом."""
+    return LLMProcessor(mock_client)
 
-    mock_to_thread = mocker.patch('core.llm_manager.to_thread', new_callable=AsyncMock)
-    mock_to_thread.return_value = mock_response
 
-    result = await llm_manager.get_raw_response("Тест промпт.")
-    assert result == expected_text
-    mock_to_thread.assert_called_once()
+# ---- Тесты process_single
 
 @pytest.mark.asyncio
-async def test_get_raw_response_raises_error_on_empty_text(llm_manager: LLMManager, mocker: MagicMock):
-    mock_response = MagicMock()
-    mock_response.text = None
-    mock_to_thread = mocker.patch('core.llm_manager.to_thread', new_callable=AsyncMock)
-    mock_to_thread.return_value = mock_response
+async def test_process_single_returns_structured_response(llm_processor: LLMProcessor, mock_client: MagicMock):
+    prompt = {"text": "Привет"}
+    mock_client.generate_single.return_value = "Ответ LLM"
 
-    with pytest.raises(LLMError, match="Модель не вернула текстовый ответ."):
-        await llm_manager.get_raw_response("Тестовый промпт")
+    response = await llm_processor.process_single(prompt)
+
+    assert isinstance(response, LLMResponse)
+    assert response.text_reply == "Ответ LLM"
+    assert response.data_json is None
+    mock_client.generate_single.assert_awaited_once()
+
 
 @pytest.mark.asyncio
-async def test_get_raw_response_handles_api_exception(llm_manager: LLMManager, mocker: MagicMock):
-    error_message = "Ошибка выполнения в потоке"
-    mock_to_thread = mocker.patch('core.llm_manager.to_thread', new_callable=AsyncMock)
-    mock_to_thread.side_effect = Exception(error_message)
+async def test_process_single_with_json_in_response(llm_processor: LLMProcessor, mock_client: MagicMock):
+    prompt = {"text": "Привет"}
+    mock_client.generate_single.return_value = 'Текст ответа===JSON==={"key":123}'
 
-    with pytest.raises(LLMError, match="Не удалось получить ответ от нейросети."):
-        await llm_manager.get_raw_response("Тестовый промпт")
+    response = await llm_processor.process_single(prompt)
+
+    assert response.text_reply == "Текст ответа"
+    assert response.data_json == {"key": 123}
+
+
+@pytest.mark.asyncio
+async def test_process_single_raises_on_invalid_prompt(llm_processor: LLMProcessor):
+    prompt = {"invalid": set([1, 2, 3])}  # set не сериализуется в JSON
+
+    with pytest.raises(LLMError, match="Ошибка сериализации промпт-объекта"):
+        await llm_processor.process_single(prompt)
+
+
+# ---- Тесты process_session_start
+
+@pytest.mark.asyncio
+async def test_process_session_start_returns_response(llm_processor: LLMProcessor, mock_client: MagicMock):
+    session_id = "session1"
+    system_prompt = {"system": "init"}
+    mock_client.start_session.return_value = "Старт сессии"
+
+    response = await llm_processor.process_session_start(session_id, system_prompt)
+
+    assert response.text_reply == "Старт сессии"
+    assert response.data_json is None
+    mock_client.start_session.assert_awaited_once_with(session_id, '{"system":"init"}')
+
+
+# ---- Тесты process_session_message
+
+@pytest.mark.asyncio
+async def test_process_session_message_returns_response(llm_processor: LLMProcessor, mock_client: MagicMock):
+    session_id = "sess2"
+    prompt = {"text": "сообщение"}
+    mock_client.send_in_session.return_value = "Ответ внутри сессии"
+
+    response = await llm_processor.process_session_message(session_id, prompt)
+
+    assert response.text_reply == "Ответ внутри сессии"
+    assert response.data_json is None
+    mock_client.send_in_session.assert_awaited_once_with(session_id, '{"text":"сообщение"}')
+
+
+# ---- Тесты process_session_end
+
+@pytest.mark.asyncio
+async def test_process_session_end_calls_client_end_session(llm_processor: LLMProcessor, mock_client: MagicMock):
+    session_id = "sess3"
+    await llm_processor.process_session_end(session_id)
+    mock_client.end_session.assert_awaited_once_with(session_id)
+
+
+# ---- Тесты _parse_response
+
+def test_parse_response_with_non_string_input():
+    raw = 12345  # число вместо строки
+    response = LLMProcessor._parse_response(raw)
+    assert response.text_reply == "12345"
+    assert response.data_json is None
+
+
+def test_parse_response_with_invalid_json_logs_error(caplog):
+    raw = 'Текст===JSON==={invalid_json}'
+    caplog.set_level("ERROR")
+    response = LLMProcessor._parse_response(raw)
+    assert response.text_reply.startswith("Текст")
+    assert response.data_json is None
+    assert any("ОШИБКА ПАРСИНГА" in r.message for r in caplog.records)

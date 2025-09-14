@@ -4,18 +4,17 @@ import asyncpg
 
 from typing import Any
 from asyncpg import exceptions as error_database
-from datetime import datetime
 
-from core.logging_config import log_error
-from core.config.types import QueryMode
+from core.config.logging_config import log_error
+from core.config.parameters import QueryMode
 from core.database.postgres_pool import PostgresPool
-from core.exceptions import (
+from core.config.exceptions import (
     DatabaseConnectionError,
     DatabaseQueryError,
     UnexpectedError,
     PoolConnectionError
 )
-import core.sql_queries as queries
+import core.config.sql_queries as queries
 
 logger = logging.getLogger(__name__)
 
@@ -205,32 +204,6 @@ class AsyncPostgresManager:
     async def set_ignore_status(self, participant_id: int, status: bool) -> None:
         """Устанавливает флаг is_ignored для участника и опускает relationship_score до 0"""
         await self._execute(queries.SET_IGNORED_STATUS, params=(status, participant_id), mode='execute')
-
-    async def add_message_log(
-            self,
-            config_id: int,
-            user_id: int,
-            message_type: str,
-            participant_id: int | None = None,
-            message_text: str | None = None
-    ) -> datetime:
-        """Логируем сообщение и ВОЗВРАЩАЕМ его точное время создания из БД."""
-        created_at = await self._execute(
-            queries.INSERT_MESSAGE_LOG,
-            params=(config_id, participant_id, user_id, message_text, message_type),
-            mode='fetch_val'
-        )
-        return created_at
-
-    async def get_message_log_for_processing(self, config_id: int, created_at: datetime) -> list[
-        dict]:
-        """Возвращает пакет сообщений в указанный промежуток времени."""
-        return await self._execute(queries.GET_MESSAGE_LOG_FOR_PROCESSING, params=(config_id, created_at),
-                                   mode='fetch_all')
-
-    async def delete_processed_messages(self, config_id: int, created_at: datetime) -> None:
-        """Удаляет пакет сообщение в указанный промежуток времени."""
-        return await self._execute(queries.DELETE_PROCESSED_MESSAGES, params=(config_id, created_at), mode='execute')
 
     async def add_long_term_memory(self, participant_id, memory_summary, importance_level) -> None:
         """Запоминаем важное событие или действие."""

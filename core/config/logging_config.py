@@ -2,7 +2,7 @@ import logging
 import os
 from logging.handlers import RotatingFileHandler
 from functools import wraps
-from core.exceptions import DuplicateUserError, UserNotFoundError, EntryNotFoundError
+from core.config.exceptions import DuplicateUserError, UserNotFoundError, EntryNotFoundError
 import asyncio
 
 

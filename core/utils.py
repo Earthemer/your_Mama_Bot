@@ -1,6 +1,6 @@
 import os
 import logging
-from core.logging_config import log_error
+from core.config.logging_config import log_error
 
 logger = logging.getLogger(__name__)
 

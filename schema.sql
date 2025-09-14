@@ -24,17 +24,8 @@ CREATE TABLE IF NOT EXISTS participants (
     created_at              TIMESTAMPTZ DEFAULT (now() at time zone 'utc'),
     updated_at              TIMESTAMPTZ DEFAULT (now() at time zone 'utc')
 );
--- Таблица 3: Журнал сообщений
-CREATE TABLE IF NOT EXISTS message_log (
-    id                  SERIAL PRIMARY KEY,
-    config_id           INTEGER NOT NULL REFERENCES mama_configs(id) ON DELETE CASCADE,
-    participant_id      INTEGER,
-    user_id             BIGINT NOT NULL,
-    message_text        TEXT,
-    message_type        TEXT NOT NULL,
-    created_at          TIMESTAMPTZ DEFAULT (now() at time zone 'utc')
-);
--- Таблица 4: Долгосрочная память (Архив)
+
+-- Таблица 3: Долгосрочная память (Архив)
 CREATE TABLE IF NOT EXISTS long_term_memory (
     id                  SERIAL PRIMARY KEY,
     participant_id      INTEGER NOT NULL REFERENCES participants(id) ON DELETE CASCADE,
@@ -59,7 +50,6 @@ DEFERRABLE INITIALLY DEFERRED;
 
 CREATE INDEX IF NOT EXISTS idx_mama_configs_chat_id ON mama_configs(chat_id);
 CREATE UNIQUE INDEX IF NOT EXISTS idx_unique_participant ON participants(config_id, user_id);
-CREATE INDEX IF NOT EXISTS idx_message_log_config_id_time ON message_log(config_id, created_at);
 
 CREATE OR REPLACE FUNCTION update_updated_at_column()
 RETURNS TRIGGER AS $$

@@ -12,7 +12,7 @@ from datetime import datetime, timedelta, timezone
 from core.config.parameters import TEST_DATABASE_URL, TEST_TABLES, fake
 from core.database.postgres_client import AsyncPostgresManager
 from core.database.postgres_pool import PostgresPool
-from core.exceptions import DatabaseConnectionError, DatabaseQueryError, UnexpectedError, PoolConnectionError
+from core.config.exceptions import DatabaseConnectionError, DatabaseQueryError, UnexpectedError, PoolConnectionError
 
 
 @pytest.fixture(scope='session')
@@ -337,53 +337,6 @@ async def test_set_ignore_status(db_manager, bot_data, cargo_bot_db, participant
     updated_participant = await db_manager.get_participant(config_id, participant['user_id'])
     assert updated_participant['relationship_score'] != original_score
     assert updated_participant['relationship_score'] == 0
-
-
-async def test_add_message_log_and_get_message(db_manager, bot_data, cargo_bot_db, participant_data,
-                                               cargo_participant_data):
-    bot = bot_data()
-    config_id = await cargo_bot_db(bot)
-    participant = participant_data(config_id=config_id)
-    participant_dict = await cargo_participant_data(participant)
-
-    message_time_from_db = await db_manager.add_message_log(
-        config_id=config_id,
-        participant_id=participant_dict['id'],
-        user_id=participant['user_id'],
-        message_text="Тестовый текст",
-        message_type='direct_mention'
-    )
-
-    time_before_insert = message_time_from_db - timedelta(seconds=1)
-    retrieved_messages = await db_manager.get_message_log_for_processing(config_id, time_before_insert)
-
-    assert retrieved_messages is not None
-    assert len(retrieved_messages) == 1
-    assert retrieved_messages[0]['message_text'] == "Тестовый текст"
-
-
-async def test_delete_processed_messages(db_manager, bot_data, cargo_bot_db, participant_data, cargo_participant_data):
-    bot = bot_data()
-    config_id = await cargo_bot_db(bot)
-    participant = participant_data(config_id=config_id)
-    participant_dict = await cargo_participant_data(participant)
-
-    message_time = await db_manager.add_message_log(
-        config_id=config_id,
-        participant_id=participant_dict['id'],
-        user_id=participant['user_id'],
-        message_text="Тестовое сообщение для удаления",
-        message_type='direct_mention'
-    )
-
-    messages = await db_manager.get_message_log_for_processing(config_id, message_time - timedelta(seconds=1))
-    assert len(messages) == 1
-
-    await db_manager.delete_processed_messages(config_id, datetime.now(timezone.utc))
-
-    messages_after = await db_manager.get_message_log_for_processing(config_id, message_time - timedelta(seconds=1))
-    assert len(messages_after) == 0
-
 
 async def test_add_and_get_long_term_memory(db_manager, bot_data, cargo_bot_db, participant_data,
                                             cargo_participant_data):

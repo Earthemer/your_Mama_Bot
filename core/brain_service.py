@@ -5,20 +5,19 @@ from aiogram.exceptions import TelegramAPIError
 
 from core.database.postgres_client import AsyncPostgresManager
 from core.database.redis_client import RedisClient
-from core.exceptions import BrainServiceError
-from core.llm_processor import LLMProcessor
-from core.logging_config import log_error
+from core.config.exceptions import BrainServiceError
+from core.llm.llm_processor import LLMProcessor
+from core.config.logging_config import log_error
 from core.prompt_factory import PromptFactory
-from core.scheduler import BotMode
-from core.config.parameters import SHORT_TERM_MEMORY_LIMIT, SHORT_TERM_MEMORY_TTL
+from core.config.botmode import BotMode
 
 logger = logging.getLogger(__name__)
 
 
 class BrainService:
     """
-    Мозг бота, принимает решение на основе данных из Redis и PostgreSQL,
-    использует PromtFactory для создания промптов и LLMProcessor для их выполнения.
+    Мозг бота. Управляет жизненным циклом сессий с LLM,
+    обрабатывает накопленные сообщения и живые диалоги.
     """
 
     def __init__(
@@ -37,7 +36,7 @@ class BrainService:
         logger.info("BrainService инициализирован.")
 
     @log_error
-    async def process_gathering_queues(self, config_id: int, time_of_day):
+    async def start_online_interactions(self, config_id: int, time_of_day):
         """
         Главный метод для пакетной обработки. Запускается из scheduler.
         1. Собирает весь контекст (конфиг, участники, сообщения).
@@ -48,8 +47,7 @@ class BrainService:
         """
         logger.debug(f"Начинаю пакетную обработку для config_id={config_id} (контекст: {time_of_day})...")
 
-        config = await self.db.get_mama_config_by_id(config_id)
-        if not config:
+        if not (config := await self.db.get_mama_config_by_id(config_id)):
             raise BrainServiceError(f"Не найден конфиг с id={config_id}. Обработка прервана.")
 
         participants = await self.db.get_all_participants_by_config_id(config_id)
@@ -71,17 +69,13 @@ class BrainService:
             for msg in all_messages
         ) if child else False
 
-        prompt = self.prompts.create_gathering_prompt(
-            config=config,
-            participants=participants,
-            messages=all_messages,
-            time_of_day=time_of_day,
-            child_was_active=child_was_active
-        )
+        system_prompt = self.prompts.create_session_start_prompt(config, participants, all_messages, time_of_day,
+                                                                 child_was_active)
 
-        llm_response = await self.llm.execute_and_parse(prompt)
+        llm_response = await self.llm.process_session_start(session_id=config_id,
+                                                            system_prompt=system_prompt)
+
         await self._send_reply(config['chat_id'], llm_response.text_reply)
-
         if llm_response.data_json:
             await self._execute_db_actions(
                 updates=llm_response.data_json.get('updates', []),
@@ -92,29 +86,30 @@ class BrainService:
 
     @log_error
     async def process_online_batch(self, config_id: int):
-        """Обрабатывает микро-пакет из Redis в Online режиме."""
-        logger.info(f"Обрабатываю микро-пакет для config_id={config_id}...")
+        """
+        STATEFUL. Обрабатывает микро-пакет из Redis ВНУТРИ активной ONLINE сессии.
+        """
+        logger.info(f"Проверяю микро-пакет для config_id={config_id}...")
 
         if not (online_messages := await self.redis.get_and_clear_batch(f"online_batch_queue:{config_id}")):
             return
 
+        logger.debug(f"Обнаружен пакет из {len(online_messages)} сообщений. Обрабатываю...")
+        prompt = self.prompts.create_online_prompt(dialog_history=online_messages)
+
+        llm_response = await self.llm.process_session_message(
+            session_id=config_id,
+            prompt=prompt
+        )
+
+        if not llm_response:
+            logger.warning(f"LLM не вернул ответ для онлайн-пакета config_id={config_id}")
+            return
+
         if not (config := await self.db.get_mama_config_by_id(config_id)):
-            raise BrainServiceError(f"Не найден конфиг с id={config_id} для онлайн-пакета.")
-
-        memory_key = f"short_term_memory:{config_id}"
-        dialog_history = await self.redis.get_json(memory_key) or []
-        full_dialog = dialog_history + online_messages
-
-        prompt = self.prompts.create_online_prompt(config, full_dialog)
-        llm_response = await self.llm.execute_and_parse(prompt)
+            raise BrainServiceError(f"Не найден конфиг с id={config_id} для отправки ответа.")
 
         await self._send_reply(config['chat_id'], llm_response.text_reply)
-
-        if llm_response.text_reply:
-            full_dialog.append({'role': 'model', 'content': llm_response.text_reply})
-
-        updated_memory = full_dialog[-SHORT_TERM_MEMORY_LIMIT:]
-        await self.redis.set_json(memory_key, updated_memory, ttl_seconds=SHORT_TERM_MEMORY_TTL)
 
         if llm_response.data_json:
             participants = await self.db.get_all_participants_by_config_id(config_id)
@@ -140,7 +135,11 @@ class BrainService:
             participants=all_participants,
             message=message
         )
-        llm_response = await self.llm.execute_and_parse(prompt)
+        llm_response = await self.llm.process_single(prompt)
+        if not llm_response:
+            logger.error(f"LLM не вернул ответ для stateless-запроса config_id={config_id}")
+            return
+
         await self._send_reply(config['chat_id'], llm_response.text_reply)
 
         if llm_response.data_json:
@@ -154,28 +153,38 @@ class BrainService:
     @log_error
     async def say_goodbye_and_switch_to_passive(self, config_id: int):
         """
-        Завершает ONLINE сессию: обрабатывает последний "хвост" сообщений,
-        прощается в ОДНОМ сообщении и меняет режим на PASSIVE.
+        Идемпотентно завершает ONLINE сессию.
+        Обрабатывает последний "хвост" сообщений, прощается,
+        завершает сессию в LLM и переключает режим на PASSIVE.
         """
+        current_mode = await self.redis.get_mode(config_id)
+        if current_mode != BotMode.ONLINE.value:
+            logger.debug(
+                f"Попытка завершить сессию для config_id={config_id}, но она уже не активна (режим: {current_mode}). Пропускаем.")
+            return
+
         logger.info(f"Завершаю ONLINE сессию для config_id={config_id}...")
 
         config = await self.db.get_mama_config_by_id(config_id)
         if not config:
+            await self.llm.process_session_end(session_id=config_id)
             await self.redis.set_mode(config_id, BotMode.PASSIVE.value)
+            await self.redis.delete(f"online_replies_count:{config_id}")
             logger.warning(f"Не найден конфиг с id={config_id} для прощания. Просто меняю режим.")
             return
 
         last_messages = await self.redis.get_and_clear_batch(f"online_batch_queue:{config_id}")
-        memory_key = f"short_term_memory:{config_id}"
-        dialog_history = await self.redis.get_json(memory_key) or []
-        full_dialog_for_prompt = dialog_history + last_messages
 
-        prompt = self.prompts.create_final_reply_prompt(config, full_dialog_for_prompt)
-        llm_response = await self.llm.execute_and_parse(prompt)
+        goodbye_prompt = self.prompts.create_final_reply_prompt(
+            config=config,
+            dialog_history=last_messages
+        )
+
+        llm_response = await self.llm.process_session_message(config_id, goodbye_prompt)
 
         await self._send_reply(config['chat_id'], llm_response.text_reply)
 
-        if llm_response.data_json and last_messages:
+        if llm_response and llm_response.data_json and last_messages:
             participants = await self.db.get_all_participants_by_config_id(config_id)
             participants_map = {p['user_id']: p for p in participants}
             await self._execute_db_actions(
@@ -185,10 +194,11 @@ class BrainService:
                 participants_map=participants_map
             )
 
+        await self.llm.process_session_end(session_id=config_id)
         await self.redis.set_mode(config_id, BotMode.PASSIVE.value)
-        await self.redis.delete(memory_key)
+        await self.redis.delete(f"online_replies_count:{config_id}")
 
-        logger.info(f"Режим для config_id={config_id} переключен на PASSIVE. Сессия завершена.")
+        logger.debug(f"Режим для config_id={config_id} переключен на PASSIVE. Сессия завершена.")
 
     @log_error
     async def _send_reply(self, chat_id: int, text: str):

@@ -3,8 +3,8 @@ import asyncpg
 import asyncio
 from asyncpg import Pool
 from contextlib import asynccontextmanager
-from core.logging_config import log_error
-from core.exceptions import PoolConnectionError
+from core.config.logging_config import log_error
+from core.config.exceptions import PoolConnectionError
 
 logger = logging.getLogger(__name__)
 

@@ -1,7 +1,6 @@
 import logging
 import random
 from datetime import datetime, timedelta
-from enum import Enum
 from typing import Any
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
@@ -18,18 +17,11 @@ from core.config.parameters import (
     RANDOM_NIGHT_HOUR, RANDOM_NIGHT_MINUTE, RANDOM_NIGHT_CHANCE_PERCENT, RANDOM_ONLINE_DURATION_NIGHT,
     GATHERING_DURATION_MINUTES
 )
-from core.logging_config import log_error
-from core.exceptions import SchedulerError
+from core.config.botmode import BotMode
+from core.config.logging_config import log_error
+from core.config.exceptions import SchedulerError
 
 logger = logging.getLogger(__name__)
-
-
-class BotMode(str, Enum):
-    """Режимы работы бота."""
-    GATHERING = 'GATHERING'
-    ONLINE = 'ONLINE'
-    PASSIVE = 'PASSIVE'
-
 
 class SchedulerManager:
     """
@@ -127,15 +119,20 @@ class SchedulerManager:
         """Запускает обработку собранных данных и включает ONLINE-режим."""
         logger.debug(f"SCHEDULER: ONLINE '{time_of_day}' для config_id={config_id} на {online_duration} минут")
         try:
-            await self.brain.process_gathering_queues(config_id, time_of_day)
+            await self.brain.start_online_interactions(config_id, time_of_day)
         finally:
             await self.redis.set_mode(config_id, BotMode.ONLINE.value)
 
             pulse_job_id = f"online_pulse_{config_id}_{time_of_day}"
             self.scheduler.add_job(
                 self.brain.process_online_batch,
-                trigger="interval", seconds=90, args=[config_id],
-                id=pulse_job_id, replace_existing=True, max_instances=1
+                trigger="interval",
+                seconds=20,
+                jitter=10,
+                args=[config_id],
+                id=pulse_job_id,
+                replace_existing=True,
+                max_instances=1
             )
 
             end_time = datetime.now(timezone) + timedelta(minutes=online_duration)

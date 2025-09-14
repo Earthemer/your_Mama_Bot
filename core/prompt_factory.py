@@ -6,283 +6,149 @@ logger = logging.getLogger(__name__)
 
 class PromptFactory:
     """
-    Отвечает за создание сложных, структуированных промтом для LLM.
-    Этот класс является 'сценаристом' для AI-персонажа.
-    Он не имеет зависимостей от других сервисов, работает только со словарями и списками.
+    Создаёт компактные структурированные промпт объекты для LLM
+    для двух режимов:
+    - stateless single reply
+    - stateful online chat
     """
 
-    def create_gathering_prompt(
+    # --- ВНУТРЕННИЕ ХЕЛПЕРЫ
+    @staticmethod
+    def _build_base_prompt_object(config: dict[str, Any]) -> dict[str, Any]:
+        """Ядро инструкций и правил"""
+        return {
+            "persona": {
+                "name": config.get("bot_name"),
+                "personality": config.get("personality_prompt")
+            },
+            "rules": {
+                "MainGoal": "Build warm long term relationships key metric relationship score 0 to 100",
+                "Tone": "Adapt to relationship score high warm friendly low neutral distant",
+                "ScoreChange": "Provide a numeric relationship change (e.g., 5 for friendly, -10 for rude).",
+                "Memory": "New memory only significant facts hobbies preferences important events",
+                "Ignore": "Add user to ignore list if insult spam score 0 child never ignored",
+                "NewUser": "Add entry in new participants reply ask 1 to 2 questions name hobbies",
+                "Language": "All replies in Russian"
+            },
+            "OutputFormat": {
+                "Structure": "Text reply followed by ===JSON=== single valid JSON object",
+                "JsonSchema": {
+                    "Updates": [{"UserId": "int", "RelationshipChange": "int", "NewMemory": "string or null"}],
+                    "IgnoreList": [{"UserId": "int", "Reason": "string"}],
+                    "NewParticipants": [
+                        {"UserId": "int", "SuggestedName": "string", "SuggestedGender": "male female unknown"}]
+                }
+            }
+        }
+
+    @staticmethod
+    def _format_participants_for_prompt(participants: list[dict[str, Any]], config: dict[str, Any]) -> dict[
+        int, dict[str, Any]]:
+        if not participants:
+            return {}
+        child_id = config.get("child_participant_id")
+        formatted: dict[int, dict[str, Any]] = {}
+        for p in participants:
+            role = "child" if p.get("id") == child_id else "member"
+            formatted[p["user_id"]] = {
+                "name": p.get("custom_name", "Unknown"),
+                "relationship_score": p.get("relationship_score", 0),
+                "role": role
+            }
+        return formatted
+
+    @staticmethod
+    def _format_messages_for_prompt(messages: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        formatted: list[dict[str, Any]] = []
+        for msg in messages:
+            user_id = msg.get("user_id")
+            author_name = (msg.get("participant_info") or {}).get("custom_name", "New User")
+            formatted.append({
+                "author_user_id": user_id,
+                "author_name": author_name,
+                "text": msg.get("text", "")
+            })
+        return formatted
+
+    # --- ONLINE CHAT PROMPT
+    def create_session_start_prompt(
             self,
             config: dict[str, Any],
-            participants: list[dict],
-            messages: list[dict],
+            participants: list[dict[str, Any]],
+            messages: list[dict[str, Any]],
             time_of_day: str,
             child_was_active: bool
-    ) -> str:
-        role = self._format_role_block(config)
-        context = self._format_context_block(time_of_day)
-        participants_info = self._format_participants_block(participants, config)
-        messages_history = self._format_messages_block(messages)
-        task = self._format_task_block(time_of_day, child_was_active)
-        json_schema = self._format_json_schema_block()
+    ) -> dict[str, Any]:
+        """
+        Создает БОЛЬШОЙ системный промпт для инициализации stateful-сессии.
+        Включает в себя весь накопленный контекст.
+        """
+        prompt = self._build_base_prompt_object(config)
+        prompt["current_state"] = {"participants": self._format_participants_for_prompt(participants, config)}
+        prompt["input_data"] = {"messages_to_analyze": self._format_messages_for_prompt(messages)}
 
-        full_prompt = (
-            f"{role}\n\n"
-            f"{context}\n\n"
-            f"{participants_info}\n\n"
-            f"{messages_history}\n\n"
-            f"{task}\n\n"
-            f"{json_schema}"
+        task_details = (
+            f"You were busy, now you are online. It is {time_of_day}. "
+            f"Write one cohesive, thoughtful message to start conversation. "
+            f"React to the messages you missed. "
         )
+        if child_was_active:
+            task_details += "Your child was active, so be sure to mention them. "
+        else:
+            task_details += "Your child was NOT active, you should ask where they are or what they are doing. "
 
-        logger.debug(
-            f"Сгенерирован промпт для GATHERING, config_id: {config.get('id')}, context: {time_of_day}"
-        )
-        return full_prompt
+        task_details += "If there is a new user, greet them."
 
-    @staticmethod
-    def _format_role_block(config: dict[str, Any]) -> str:
-        personality = config.get("personality_prompt")
-
-        base_role = f"""Ты — ассистент по имени «{config['bot_name']}».
-
-    ТВОЯ РОЛЬ:
-    1. Общаться дружелюбно и естественно, оставаясь в образе.
-    2. Твой характер и стиль общения: {personality if personality else "не задан"}.
-    3. Главная цель — выстраивать долгосрочные и тёплые отношения с участниками чата.
-       Тон общения с каждым человеком должен зависеть от ваших отношений
-       (relationship_score), указанных в блоке «Участники диалога».
-    """
-
-        return base_role
-
-    @staticmethod
-    def _format_context_block(time_of_day: str) -> str:
-        """Формирует блок с контекстом в зависимости от времени суток."""
-        contexts = {
-            'morning': "Сейчас утро. Ты заходишь в чат после ночи, чтобы пожелать всем доброго утра и проверить, как у них дела.",
-            'afternoon': "Сейчас день. Ты нашла свободную минутку, чтобы заглянуть в чат и поучаствовать в дневных обсуждениях.",
-            'evening': "Сейчас вечер. Ты зашла в чат, чтобы расслабиться после долгого дня и спокойно поболтать со всеми.",
-            'random': "Ты неожиданно нашла свободное время. Ты заходишь в чат, чтобы внепланово проверить, как дела у твоей семьи в чате."
+        prompt["task"] = {
+            "action": "START_CONVERSATION_WITH_BACKLOG_ANALYSIS",
+            "details": task_details
         }
-        context_text = contexts.get(time_of_day, contexts['random'])
+        return prompt
 
-        return f"КОНТЕКСТ:\n{context_text}"
-
-    @staticmethod
-    def _format_participants_block(participants: list[dict], config: dict[str, Any]) -> str:
-        """Формирует блок с информацией об известных участниках диалога."""
-        if not participants:
-            return "УЧАСТНИКИ ДИАЛОГА:\nПока в чате нет никого, кого бы ты знала."
-
-        header = "УЧАСТНИКИ ДИАЛОГА (твои знания о них):\n"
-        lines = []
-        child_id = config.get('child_participant_id')
-
-        for p in participants:
-            role = " (твой ребенок)" if p.get('id') == child_id else ""
-            line = (
-                f"- {p.get('custom_name', 'Без имени')} (user_id: {p.get('user_id', 'неизвестно')}){role}. "
-                f"Ваши отношения: {p.get('relationship_score', 50)}/100."
-            )
-            lines.append(line)
-
-        return header + "\n".join(lines)
-
-    @staticmethod
-    def _format_messages_block(messages: list[dict]) -> str:
-        """Формирует блок с историепй сообщений для анализа."""
-        if not messages:
-            return "ИСТОРИЯ СООБЩЕНИЙ:\nВ чате за это время не было сообщений."
-
-        header = "ИСТОРИЯ СООБЩЕНИЙ (проанализируй их все):\n"
-        lines = []
-        for msg in messages:
-            participant_info = msg.get('participant_info')
-            author_name = participant_info.get(
-                'custom_name') if participant_info else f"Новый пользователь (user_id: {msg.get('user_id', 'неизвестно')})"
-            lines.append(f"[{author_name}]: {msg.get('text', '')}")
-
-        return header + "\n".join(lines)
-
-    @staticmethod
-    def _format_task_block(time_of_day: str, child_was_active: bool) -> str:
-        """Формирует блок с конкретной задачей для LLM, адаптированной под время суток."""
-
-        base_task = (
-            "1. Внимательно прочти всю историю сообщений.\n"
-            "2. Напиши ОДНО ОБЩЕЕ сообщение в чат, в котором ты, в соответствии со своей ролью:\n"
-            "   - Отреагируй на ключевые темы в диалоге.\n"
-            "   - Обратись к участникам по именам, особенно к своему ребёнку.\n"
-            "   - Если есть новые пользователи, тепло поприветствуй их и попробуй познакомиться "
-            "(задай пару вопросов, чтобы понять какое отношение выставить новому участнику).\n"
-        )
-
-        task_additions = {
-            "morning": "   - Пожелай всем продуктивного дня.",
-            "afternoon": "   - Пожелай всем хорошего дня.",
-            "evening": "   - Пожелай всем хорошего вечера или спокойной ночи.",
-            "random": "   - Упомяни, что ты зашла ненадолго и скоро снова убежишь по делам."
+    # --- УПРОЩЕННЫЙ МЕТОД ДЛЯ ОНЛАЙНА
+    def create_online_prompt(self, dialog_history: list[dict[str, Any]]) -> dict[str, Any]:
+        """
+        Создает ЛЕГКИЙ промпт для отправки сообщений ВНУТРИ уже активной сессии.
+        Не содержит системных инструкций, так как LLM их уже помнит.
+        """
+        return {
+            "input_data": {"recent_dialog_history": self._format_messages_for_prompt(dialog_history)},
+            "task": {
+                "action": "CONTINUE_LIVE_CONVERSATION",
+                "details": "Write short engaging reply to the last message(s). Keep the chat going."
+            }
         }
-        addition = task_additions.get(time_of_day, "")
 
-        if not child_was_active:
-            addition += (
-                "\n   - ВАЖНО: Твой ребёнок ничего не писал в последнее время. "
-                "Прояви заботу: спроси, где он и как у него дела."
-            )
-
-        final_task = (
-            "\n3. После текстового ответа, проанализируй диалог и верни JSON-объект "
-            "с обновлениями для твоей памяти. Это КРИТИЧЕСКИ ВАЖНО."
-        )
-
-        full_task_str = f"{base_task}{addition}{final_task}" if addition else f"{base_task.strip()}{final_task}"
-
-        return f"ТВОЯ ЗАДАЧА:\n{full_task_str}"
-
-    @staticmethod
-    def _format_json_schema_block() -> str:
-        """Формирует блок с требуемым форматом JSON, который должен вернуть LLM."""
-        return (
-            "ФОРМАТ ОТВЕТА:\n"
-            "Сначала напиши свой текстовый ответ для чата. После него ОБЯЗАТЕЛЬНО поставь разделитель '===JSON===' и предоставь JSON-объект.\n"
-            "\n"
-            "[Твой текстовый ответ для чата. Он может быть многострочным.]\n"
-            "===JSON===\n"
-            "{\n"
-            '  "updates": [\n'
-            '    {\n'
-            '      "user_id": 12345,\n'
-            '      "relationship_change": 5,\n'
-            '      "new_memory": "Петя рассказал, что увлекается рыбалкой."\n'
-            '    }\n'
-            '  ],\n'
-            '  "new_participants": [\n'
-            '    {\n'
-            '       "user_id": 67890,\n'
-            '       "suggested_name": "Анна",\n'
-            '       "suggested_gender": "female",\n'
-            '       "initial_relationship": 50\n'
-            '    }\n'
-            '  ]\n'
-            '}'
-        )
-
-    def create_goodbye_prompt(self, config: dict[str, Any]) -> str:
+    # --- STATELESS SINGLE REPLY
+    def create_single_reply_prompt(self, config: dict[str, Any], participants: list[dict[str, Any]],
+                                   message: dict[str, Any]) -> dict[str, Any]:
         """
-        Создает промпт для вежливого завершения диалога.
+        Stateless режим: отдельное сообщение с полными инструкциями
         """
-        role = self._format_role_block(config)
+        prompt = self._build_base_prompt_object(config)
+        prompt["current_state"] = {"participants": self._format_participants_for_prompt(participants, config)}
+        prompt["input_data"] = {"message_to_reply": self._format_messages_for_prompt([message])[0]}
+        prompt["task"] = {
+            "action": "SINGLE_DIRECT_REPLY",
+            "details": "Provide personal short direct reply to this message"
+        }
+        return prompt
 
-        task = (
-            "ТВОЯ ЗАДАЧА:\n"
-            "Ты вела активный диалог, но теперь тебе пора идти. "
-            "Напиши короткое, теплое прощальное сообщение для чата. "
-            "Скажи, что тебе нужно бежать по делам, но ты еще вернешься позже. "
-            "Ответ должен быть только текстом, без JSON."
-        )
+    # --- FINAL AND GOODBYE PROMPTS
+    def create_final_reply_prompt(self, config: dict[str, Any], dialog_history: list[dict[str, Any]]) -> dict[str, Any]:
+        prompt = self._build_base_prompt_object(config)
+        prompt["input_data"] = {"final_messages": self._format_messages_for_prompt(dialog_history)}
+        prompt["task"] = {
+            "action": "REPLY_AND_SAY_GOODBYE",
+            "details": "Reply to final messages then say warm goodbye in same message"
+        }
+        return prompt
 
-        return f"{role}\n\n{task}"
-
-    def create_online_prompt(
-            self,
-            config: dict[str, Any],
-            dialog_history: list[dict[str, Any]]
-    ) -> str:
-        """Создает легкий промпт для быстрых ответов в ONLINE режиме.
-        Использует краткосрочную память (историю диалога), а не полный контекст"""
-
-        role = self._format_role_block(config)
-        messages_history = self._format_messages_block(dialog_history)
-
-        task = (
-            "ТВОЯ ЗАДАЧА:\n"
-            "Ты находишься в середине живого диалога. Твоя цель — поддержать разговор.\n"
-            "1. Прочти последние сообщения.\n"
-            "2. Напиши КОРОТКИЙ, живой ответ на последние реплики в соответствии со своей ролью.\n"
-            "3. После ответа, верни JSON с обновлениями ТОЛЬКО для тех участников, с кем ты сейчас взаимодействовала."
-        )
-
-        json_schema = self._format_json_schema_block()
-
-        full_prompt = (
-            f"{role}\n\n"
-            f"ИСТОРИЯ ТЕКУЩЕГО ДИАЛОГА:\n{messages_history}\n\n"
-            f"{task}\n\n"
-            f"{json_schema}"
-        )
-        return full_prompt
-
-    def create_single_reply_prompt(
-            self,
-            config: dict[str, Any],
-            participants: list[dict[str, Any]],  # Полный контекст чата все еще важен
-            message: dict[str, Any]  # Конкретное сообщение, на которое отвечаем
-    ) -> str:
-        """
-        Создает промпт для немедленного ответа на одно прямое обращение.
-        """
-        role = self._format_role_block(config)
-        participants_info = self._format_participants_block(participants, config)
-
-        # Здесь мы форматируем только ОДНО сообщение, а не историю
-        participant_info = message.get('participant_info')
-        author_name = participant_info.get(
-            'custom_name') if participant_info else f"Пользователь (user_id: {message.get('user_id')})"
-        message_to_reply = f"СООБЩЕНИЕ ДЛЯ ОТВЕТА:\n[{author_name}]: {message.get('text', '')}"
-
-        task = (
-            "ТВОЯ ЗАДАЧА:\n"
-            "Ты была занята своими делами, но тебя отвлекло прямое обращение.\n"
-            "1. Прочти сообщение выше.\n"
-            "2. Напиши прямой, личный и короткий ответ этому человеку в соответствии со своей ролью.\n"
-            "3. После ответа, верни JSON с обновлениями ТОЛЬКО для этого участника."
-        )
-
-        json_schema = self._format_json_schema_block()
-
-        full_prompt = (
-            f"{role}\n\n"
-            f"{participants_info}\n\n"  # <--- Важно: она все еще помнит, кто есть кто в чате
-            f"{message_to_reply}\n\n"
-            f"{task}\n\n"
-            f"{json_schema}"
-        )
-        return full_prompt
-
-    def create_final_reply_prompt(
-            self,
-            config: dict[str, Any],
-            dialog_history: list[dict[str, Any]]  # История диалога, включая "хвост"
-    ) -> str:
-        """
-        Создает финальный промпт, который одновременно отвечает на последние
-        сообщения и вежливо завершает диалог.
-        """
-        role = self._format_role_block(config)
-        messages_history = self._format_messages_block(dialog_history)
-
-        task = (
-            "ТВОЯ ЗАДАЧА:\n"
-            "Ты находишься в середине живого диалога, но тебе СРОЧНО нужно уходить.\n"
-            "1. Прочти последние сообщения в истории.\n"
-            "2. Напиши ОДНО ОБЩЕЕ прощальное сообщение, в котором ты:\n"
-            "   а) Сначала коротко ответишь на самые важные из последних реплик, если они есть.\n"
-            "   б) Сразу после этого вежливо попрощаешься, сказав, что тебе пора бежать по делам.\n"
-            "   Твой ответ должен быть единым, цельным сообщением.\n"
-            "3. После ответа, верни JSON с обновлениями для участников, на чьи реплики ты отреагировала."
-        )
-
-        json_schema = self._format_json_schema_block()
-
-        full_prompt = (
-            f"{role}\n\n"
-            f"ИСТОРИЯ ТЕКУЩЕГО ДИАЛОГА:\n{messages_history}\n\n"
-            f"{task}\n\n"
-            f"{json_schema}"
-        )
-        return full_prompt
-
-
-
+    def create_goodbye_prompt(self, config: dict[str, Any]) -> dict[str, Any]:
+        prompt = self._build_base_prompt_object(config)
+        prompt.pop("OutputFormat", None)
+        prompt["task"] = {
+            "action": "SAY_GOODBYE",
+            "details": "Write short warm goodbye message no JSON output"
+        }
+        return prompt

@@ -3,7 +3,7 @@ import random
 from aiogram import types
 
 from core.database.redis_client import RedisClient
-from core.logging_config import log_error
+from core.config.logging_config import log_error
 from core.config.parameters import (
     PASSIVE_MODE_CHANCE,
     ONLINE_MODE_REPLY_LIMIT,

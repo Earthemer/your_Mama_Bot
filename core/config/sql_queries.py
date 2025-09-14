@@ -1,9 +1,3 @@
-# core/sql_queries.py
-
-# =================================================================
-# ЭТАП 1: Запросы для настройки (Setup)
-# =================================================================
-
 UPSERT_MAMA_CONFIG = """
 INSERT INTO mama_configs (chat_id, bot_name, admin_id, timezone, personality_prompt)
 VALUES ($1, $2, $3, $4, $5)
@@ -48,10 +42,6 @@ RETURNING id, custom_name;
 
 UPDATE_PERSONALITY_PROMPT = "UPDATE mama_configs SET personality_prompt = $1 WHERE id = $2;"
 
-# =================================================================
-# ЭТАП 2: Запросы для "мозга" и жизненного цикла
-# =================================================================
-
 GET_PARTICIPANT = """
 SELECT id, custom_name, gender, relationship_score, is_ignored, last_interaction_at
 FROM participants
@@ -84,29 +74,6 @@ SET
     is_ignored = $1,
     relationship_score = CASE WHEN $1 THEN 0 ELSE relationship_score END
 WHERE id = $2;
-"""
-
-# --- Журнал сообщений (Message Log) ---
-INSERT_MESSAGE_LOG = """
-INSERT INTO message_log (config_id, participant_id, user_id, message_text, message_type)
-VALUES ($1, $2, $3, $4, $5)
-RETURNING created_at; 
-"""
-
-GET_MESSAGE_LOG_FOR_PROCESSING = """
-SELECT 
-    ml.user_id,
-    ml.message_text,
-    ml.message_type,
-    p.custom_name
-FROM message_log ml
-LEFT JOIN participants p ON ml.participant_id = p.id
-WHERE ml.config_id = $1 AND ml.created_at >= $2
-ORDER BY ml.created_at;
-"""
-
-DELETE_PROCESSED_MESSAGES = """
-DELETE FROM message_log WHERE config_id = $1 AND created_at < $2;
 """
 
 INSERT_LONG_TERM_MEMORY = """

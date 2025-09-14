@@ -6,8 +6,8 @@ from redis.asyncio import Redis, ConnectionPool
 from contextlib import asynccontextmanager
 from typing import Any
 
-from core.exceptions import RedisConnectionError
-from core.logging_config import log_error
+from core.config.exceptions import RedisConnectionError
+from core.config.logging_config import log_error
 
 logger = logging.getLogger(__name__)
 

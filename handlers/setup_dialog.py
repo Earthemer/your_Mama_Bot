@@ -1,6 +1,6 @@
 import logging
-from core.logging_config import log_error
-from core.exceptions import AiogramError, LLMError
+from core.config.logging_config import log_error
+from core.config.exceptions import AiogramError, LLMError
 from aiogram import Router, F, types
 from aiogram.fsm.context import FSMContext
 from aiogram.enums import ChatType
@@ -13,7 +13,7 @@ from keyboards.setup_kb import (
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from core.validation import MamaName
 from aiogram import Bot
-from core.llm_manager import LLMManager
+from core.llm.gemini_client import LLMManager
 from core.database.postgres_client import AsyncPostgresManager
 
 logger = logging.getLogger(__name__)

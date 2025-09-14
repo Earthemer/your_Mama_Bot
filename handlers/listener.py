@@ -1,13 +1,12 @@
 import logging
-import json
 
 from aiogram import Router, F, types, Bot
 from aiogram.enums import ChatType
 
 from core.database.postgres_client import AsyncPostgresManager
 from core.database.redis_client import RedisClient
-from core.exceptions import ListenerError
-from core.logging_config import log_error
+from core.config.exceptions import ListenerError
+from core.config.logging_config import log_error
 from core.operator import Operator
 from core.config.parameters import CONFIG_CACHE_TTL
 

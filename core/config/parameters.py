@@ -1,8 +1,11 @@
 import logging
-import random
+
 
 from dotenv import load_dotenv
 from faker import Faker
+from typing import Any
+from google.generativeai import types
+from typing import Literal
 
 from core.utils import get_str_env, get_int_env, get_float_env
 
@@ -96,6 +99,24 @@ ONLINE_MODE_REPLY_LIMIT = get_int_env('ONLINE_MODE_REPLY_LIMIT', 10)
 ONLINE_MODE_USER_COOLDOWN_SECONDS = get_int_env('ONLINE_MODE_USER_COOLDOWN_SECONDS', 60)
 ONLINE_MODE_BATCH_THRESHOLD = get_int_env('ONLINE_MODE_BATCH_THRESHOLD', 3)
 
-# --- BrainService
-SHORT_TERM_MEMORY_LIMIT = get_int_env('SHORT_TERM_MEMORY_LIMIT', 30)
-SHORT_TERM_MEMORY_TTL = get_int_env('SHORT_TERM_MEMORY_TTL', 3600)
+# ------- llm -------
+Prompt = dict[str, Any], list[Any]
+SessionId = Any
+
+# ------- Gemeni -------
+SAFETY_SETTINGS = [
+    {"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_MEDIUM_AND_ABOVE"},
+    {"category": "HARM_CATEGORY_HATE_SPEECH", "threshold": "BLOCK_MEDIUM_AND_ABOVE"},
+    {"category": "HARM_CATEGORY_SEXUALLY_EXPLICIT", "threshold": "BLOCK_MEDIUM_AND_ABOVE"},
+    {"category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "BLOCK_MEDIUM_AND_ABOVE"},
+]
+
+GENERATION_CONFIG = types.GenerationConfig(
+    temperature=0.9,
+    top_p=1,
+    top_k=1,
+    max_output_tokens=2048,
+)
+
+QueryMode = Literal['execute', 'fetch_all', 'fetch_row', 'fetch_val']
+
