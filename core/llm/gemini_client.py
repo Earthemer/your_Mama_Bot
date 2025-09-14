@@ -1,9 +1,9 @@
 import logging
-from core.logging_config import log_error
+from core.config.logging_config import log_error
 from asyncio import to_thread
 from google import genai
 from google.genai import types
-from core.exceptions import LLMError
+from core.config.exceptions import LLMError
 
 logger = logging.getLogger(__name__)
 

@@ -1,10 +1,8 @@
 import pytest
 from unittest.mock import MagicMock, AsyncMock
 
-from pygments.lexer import default
-
-from core.llm_manager import LLMManager
-from core.exceptions import LLMError
+from core.llm.llm_manager import LLMManager
+from core.config.exceptions import LLMError
 
 # ---- Фикстуры
 @pytest.fixture
