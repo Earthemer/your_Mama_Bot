@@ -1,4 +1,3 @@
-# keyboards/setup_kb.py
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 
@@ -55,13 +54,6 @@ def get_gender_keyboard() -> InlineKeyboardMarkup:
     builder.row(
         InlineKeyboardButton(text="❌ Отмена", callback_data="cancel_setup")
     )
-    return builder.as_markup()
-
-def get_personality_keyboard() -> InlineKeyboardMarkup:
-    """Клавиатура с кнопками Да/Нет для добавления личности."""
-    builder = InlineKeyboardBuilder()
-    builder.button(text="✍️ Да, добавить", callback_data="add_personality")
-    builder.button(text="⏩ Пропустить", callback_data="skip_personality")
     return builder.as_markup()
 
 

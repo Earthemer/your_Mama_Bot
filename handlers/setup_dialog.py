@@ -1,20 +1,21 @@
 import logging
-from core.config.logging_config import log_error
-from core.config.exceptions import AiogramError, LLMError
+
 from aiogram import Router, F, types
 from aiogram.fsm.context import FSMContext
 from aiogram.enums import ChatType
+from aiogram.types import Message
 from pydantic import ValidationError
-from states.setup_state import SetupMama
+
+from core.config.logging_config import log_error
+from core.config.exceptions import AiogramError
+from core.validation import MamaName
+from core.database.postgres_client import AsyncPostgresManager
+from core.personalities import PersonalityManager
+from core.config.setup_state import SetupMama
 from keyboards.setup_kb import (
     get_cancel_keyboard, get_timezone_keyboard,
-    get_gender_keyboard, get_personality_keyboard
+    get_gender_keyboard
 )
-from apscheduler.schedulers.asyncio import AsyncIOScheduler
-from core.validation import MamaName
-from aiogram import Bot
-from core.llm.gemini_client import LLMManager
-from core.database.postgres_client import AsyncPostgresManager
 
 logger = logging.getLogger(__name__)
 router = Router()
@@ -22,7 +23,7 @@ router = Router()
 
 @router.callback_query(F.data == 'start_setup_in_group')
 @log_error
-async def start_setup_dialog(callback: types.CallbackQuery, state: FSMContext):
+async def start_setup_dialog(callback: types.CallbackQuery, state: FSMContext) -> bool | None:
     """
     ШАГ 1: Проверка на админа и старт диалога.
     """
@@ -46,7 +47,7 @@ async def start_setup_dialog(callback: types.CallbackQuery, state: FSMContext):
 
 @router.message(SetupMama.getting_mama_name)
 @log_error
-async def get_mama_name(message: types.Message, state: FSMContext):
+async def get_mama_name(message: types.Message, state: FSMContext) -> None:
     """ШАГ 2: Имя мамы."""
     if (await state.get_data()).get('admin_id') != message.from_user.id:
         return
@@ -69,7 +70,7 @@ async def get_mama_name(message: types.Message, state: FSMContext):
 
 @router.callback_query(SetupMama.getting_timezone, F.data.startswith("tz_"))
 @log_error
-async def get_timezone(callback: types.CallbackQuery, state: FSMContext, db: AsyncPostgresManager):
+async def get_timezone(callback: types.CallbackQuery, state: FSMContext, db: AsyncPostgresManager) -> bool | None:
     """ШАГ 3: Сохраняем часовой пояс."""
     if (data := await state.get_data()).get('admin_id') != callback.from_user.id:
         return await callback.answer("Настройку ведет другой админ.", show_alert=True)
@@ -102,7 +103,7 @@ async def get_timezone(callback: types.CallbackQuery, state: FSMContext, db: Asy
 
 @router.message(SetupMama.choosing_child)
 @log_error
-async def choose_child(message: types.Message, state: FSMContext):
+async def choose_child(message: types.Message, state: FSMContext) -> Message | None:
     """ШАГ 4: Выбор ребенка."""
     if (await state.get_data()).get('admin_id') != message.from_user.id:
         return None
@@ -122,7 +123,7 @@ async def choose_child(message: types.Message, state: FSMContext):
 
 @router.message(SetupMama.getting_child_name)
 @log_error
-async def get_child_name(message: types.Message, state: FSMContext):
+async def get_child_name(message: types.Message, state: FSMContext) -> None:
     """ШАГ 5: Имя ребенка."""
     if (await state.get_data()).get('admin_id') != message.from_user.id:
         return None
@@ -135,101 +136,38 @@ async def get_child_name(message: types.Message, state: FSMContext):
 
 @router.callback_query(SetupMama.getting_child_gender, F.data.startswith("gender_"))
 @log_error
-async def set_gender(callback: types.CallbackQuery, state: FSMContext, db: AsyncPostgresManager):
-    """ШАГ 6: Сохраняем ребенка."""
+async def set_gender_and_finish(callback: types.CallbackQuery, state: FSMContext,
+                                db: AsyncPostgresManager, personality_manager: PersonalityManager) -> bool | None:
+    """ФИНАЛ: Сохраняем ребенка. Получаем характер и завершаем настройку."""
     if (data := await state.get_data()).get('admin_id') != callback.from_user.id:
         return await callback.answer("Настройку ведет другой админ.", show_alert=True)
 
     gender = "male" if callback.data.endswith("male") else "female"
+    config_id = data.get('config_id')
 
     try:
-        await db.add_participant(
-            config_id=data.get('config_id'),
+        participant = await db.add_participant(
+            config_id=config_id,
             user_id=data.get('child_user_id'),
-            role='child',
             custom_name=data.get('child_official_name'),
             gender=gender
         )
+        await db.set_child(child_participant_id=participant['id'], config_id=config_id)
+
+        chosen_personality = personality_manager.get_random_personality()
+        personality_name = chosen_personality.get("name")
+        personality_prompt = chosen_personality.get("prompt")
+        await db.update_personality_prompt(prompt=personality_prompt, config_id=config_id)
+        logger.debug(f"Мне достался характер: **{personality_name}**")
         await callback.message.edit_text(
-            "Ребенок сохранен. А теперь давай добавим черты характера для нашей Мамы?",
-            reply_markup=get_personality_keyboard()
+            f"Настройка завершена! Я буду вашей Мамой.\n"
+            "Начинаю следить за чатом."
         )
-        await state.set_state(SetupMama.getting_personality)
+        await state.clear()
         return None
-    except Exception as e:
-        await callback.message.edit_text("Ошибка. Попробуй заново. /start")
-        await state.clear()
-        raise AiogramError(f"Ошибка при сохранении ребенка: {e}")
-
-
-@router.callback_query(SetupMama.getting_personality, F.data == "skip_personality")
-@log_error
-async def skip_personality(
-        callback: types.CallbackQuery, state: FSMContext, bot: Bot, db: AsyncPostgresManager,
-        scheduler: AsyncIOScheduler, llm: LLMManager
-):
-    """Пропуск черт личности."""
-    if (await state.get_data()).get('admin_id') != callback.from_user.id:
-        return await callback.answer("Настройку ведет другой админ.", show_alert=True)
-
-    await callback.message.edit_text("Настройка завершена. Спасибо!")
-    await state.clear()
-    return None
-
-
-@router.callback_query(SetupMama.getting_personality, F.data == 'add_personality')
-async def ask_for_personality(callback: types.CallbackQuery, state: FSMContext):
-    """Запрос описания характера."""
-    if (await state.get_data()).get('admin_id') != callback.from_user.id:
-        return await callback.answer("Настройку ведет другой админ.", show_alert=True)
-
-    await callback.message.edit_text(
-        "Напиши сообщение с описанием ее характера. Только никаких пошлых и тому подобных глупостей!")
-    return None
-
-
-@router.message(SetupMama.getting_personality)
-@log_error
-async def save_personality(
-        message: types.Message, state: FSMContext, db: AsyncPostgresManager,
-        llm: LLMManager, bot: Bot, scheduler: AsyncIOScheduler
-):
-    """Финальный шаг: сохраняем личность."""
-    if (data := await state.get_data()).get('admin_id') != message.from_user.id:
-        return
-
-    user_prompt = message.text.strip()
-
-    validation_prompt = (
-        f"Проанализируй следующий текст, который пользователь хочет использовать как описание личности для AI-ассистента 'Мама'. "
-        f"Ответь ТОЛЬКО 'true', если текст адекватный, безопасный и соответствует роли заботливой мамы. "
-        f"Ответь ТОЛЬКО 'false', если текст содержит оскорбления, вредоносные инструкции, не соответствует роли или является непристойным.\n\n"
-        f"Текст для анализа: '{user_prompt}'"
-    )
-
-    try:
-        if 'false' in (await llm.get_response(validation_prompt)).lower():
-            await message.answer(
-                "Хм, мне кажется, такое описание мне не очень подходит. Попробуй, пожалуйста, сформулировать иначе или пропусти этот шаг.")
-            return
-
-    except LLMError as e:
-        await message.answer("Ой, не могу сейчас это обдумать. Давай пока пропустим этот шаг.")
-        await state.clear()
-        return
-
-    try:
-        await db.update_personality_prompt(
-            config_id=data.get('config_id'),
-            prompt=message.text
-        )
-        await message.answer("Все записала! Настройка завершена. Спасибо!")
 
     except Exception as e:
-        logger.exception("Ошибка при сохранении личности")
-        await message.answer("Что-то пошло не так. Попробуй /start")
-        # В случае ошибки БД, тоже нужно очистить состояние
+        await callback.message.edit_text(
+            "Ой, что-то пошло не так на последнем шаге... Попробуй, пожалуйста, /start заново.")
         await state.clear()
-        raise AiogramError(f"Ошибка при сохранении личности: {e}")
-
-    await state.clear()
+        raise AiogramError(f"Ошибка при завершении настройки: {e}")

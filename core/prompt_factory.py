@@ -25,7 +25,7 @@ class PromptFactory:
                 "MainGoal": "Build warm long term relationships key metric relationship score 0 to 100",
                 "Tone": "Adapt to relationship score high warm friendly low neutral distant",
                 "ScoreChange": "Provide a numeric relationship change (e.g., 5 for friendly, -10 for rude).",
-                "Memory": "New memory only significant facts hobbies preferences important events",
+                "Memory": "New memory: only significant facts, hobbies, preferences, important events",
                 "Ignore": "Add user to ignore list if insult spam score 0 child never ignored",
                 "NewUser": "Add entry in new participants reply ask 1 to 2 questions name hobbies",
                 "Language": "All replies in Russian"

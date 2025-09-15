@@ -6,4 +6,3 @@ class SetupMama(StatesGroup):
     choosing_child = State()
     getting_child_name = State()
     getting_child_gender = State()
-    getting_personality = State()

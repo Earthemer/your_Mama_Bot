@@ -1,9 +1,11 @@
 import logging
-from core.config.logging_config import log_error
+
 from aiogram import Router, F, types
 from aiogram.filters import CommandStart, Command, StateFilter
 from aiogram.fsm.context import FSMContext
 from aiogram.enums import ChatType
+
+from core.config.logging_config import log_error
 from core.database.postgres_client import AsyncPostgresManager
 from core.config.exceptions import DatabaseConnectionError
 from keyboards.setup_kb import get_setup_keyboard
@@ -11,7 +13,6 @@ from keyboards.setup_kb import get_setup_keyboard
 logger = logging.getLogger(__name__)
 
 router = Router()
-
 
 @router.message(CommandStart(), StateFilter(None))
 @log_error
@@ -63,7 +64,6 @@ async def handle_clean(message: types.Message, db: AsyncPostgresManager):
         await message.answer("Только администраторы могут сбрасывать мои настройки.")
         return
 
-    # 3. Основная логика: удаление из БД
     try:
         deleted_rows = await db.delete_mama_config(chat_id=chat_id)
         if deleted_rows > 0:
