@@ -4,7 +4,7 @@ import logging
 from dotenv import load_dotenv
 from faker import Faker
 from typing import Any
-from google.generativeai import types
+from google.generativeai.types import GenerationConfig
 from typing import Literal
 
 from core.utils import get_str_env, get_int_env, get_float_env
@@ -111,7 +111,8 @@ SAFETY_SETTINGS = [
     {"category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "BLOCK_MEDIUM_AND_ABOVE"},
 ]
 
-GENERATION_CONFIG = types.GenerationConfig(
+# Конфигурация генерации
+GENERATION_CONFIG = GenerationConfig(
     temperature=0.9,
     top_p=1,
     top_k=1,

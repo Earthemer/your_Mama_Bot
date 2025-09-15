@@ -10,7 +10,7 @@ def get_int_env(var_name: str, default: int) -> int:
     value_str = os.getenv(var_name, str(default))
     try:
         value = int(value_str)
-        if value <= 0 and "PORT" not in var_name.upper():
+        if value < 0 and "PORT" not in var_name.upper():
             logger.warning(f"Значение {var_name} ('{value_str}') должно быть положительным. Используется default: {default}.")
             return default
         return value

@@ -7,7 +7,7 @@ from aiogram import Bot
 from tests.test_operator import redis_client, test_config, test_participant, background_message
 from handlers.listener import message_listener
 from core.database.postgres_client import AsyncPostgresManager
-from core.operator import Operator
+from core.operator_messages import Operator
 
 
 # ---- Фикстуры

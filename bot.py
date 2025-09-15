@@ -1,10 +1,11 @@
 import asyncio
 import logging
-
+import requests
 from aiogram import Bot, Dispatcher
 from aiogram.fsm.storage.redis import RedisStorage
 from aiogram.enums import ParseMode
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
+from aiogram.client.default import DefaultBotProperties
 
 from core.config.parameters import (
     DATABASE_URL, POOL_PARAMETERS, GEMINI_API_KEY, BOT_TOKEN, REDIS_HOST, REDIS_PORT
@@ -19,7 +20,7 @@ from core.llm.gemini_client import GeminiClient
 from core.llm.llm_processor import LLMProcessor
 from core.prompt_factory import PromptFactory
 from core.brain_service import BrainService
-from core.operator import Operator
+from core.operator_messages import Operator
 from core.scheduler import SchedulerManager
 from handlers import common, setup_dialog, listener
 
@@ -32,6 +33,7 @@ async def main():
     storage = RedisStorage.from_url(f"redis://{REDIS_HOST}:{REDIS_PORT}/1")
     db_pool = PostgresPool(dsn=DATABASE_URL, **POOL_PARAMETERS)
     redis_client = RedisClient(host=REDIS_HOST, port=REDIS_PORT)
+
     scheduler = AsyncIOScheduler()
 
     await db_pool.create_pool()
@@ -42,7 +44,7 @@ async def main():
     gemini_client = GeminiClient(api_key=GEMINI_API_KEY)
     llm_processor = LLMProcessor(client=gemini_client)
     prompt_factory = PromptFactory()
-    bot = Bot(token=BOT_TOKEN, parse_mode=ParseMode.HTML)
+    bot = Bot(token=BOT_TOKEN, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
     brain_service = BrainService(
         redis_client=redis_client,
         db_manager=db_manager,
@@ -87,6 +89,7 @@ async def main():
 if __name__ == '__main__':
     try:
         asyncio.run(main())
+        logger.debug(requests.get("https://ifconfig.me").text)
     except (KeyboardInterrupt, SystemExit):
         logger.info("Бот остановлен вручную.")
     except Exception as e:

@@ -9,7 +9,7 @@ from aiogram import types
 
 from core.config.parameters import ONLINE_MODE_BATCH_THRESHOLD, ONLINE_MODE_REPLY_LIMIT
 from core.brain_service import BrainService
-from core.operator import Operator
+from core.operator_messages import Operator
 from core.database.redis_client import RedisClient
 
 

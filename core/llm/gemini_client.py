@@ -1,12 +1,12 @@
 import logging
-
 from asyncio import to_thread
 import google.generativeai as genai
 from google.api_core import exceptions as google_exceptions
+from core.config.parameters import GENERATION_CONFIG, SAFETY_SETTINGS
 
 from core.llm.base_llm_client import BaseLLMClient
 from core.config.exceptions import LLMError
-from core.config.parameters import SessionId, Prompt, GENERATION_CONFIG, SAFETY_SETTINGS
+from core.config.parameters import SessionId, Prompt
 from core.config.logging_config import log_error
 
 logger = logging.getLogger(__name__)
@@ -16,13 +16,21 @@ class GeminiClient(BaseLLMClient):
     """Реализация LLM-клиента для Google Gemini API."""
 
     @log_error
-    def __init__(self, api_key: str):
+    def __init__(self, api_key: str, model_name: str = "gemini-1.5-flash"):
         if not api_key:
             raise LLMError("API-ключ для Gemini не предоставлен!")
+
         genai.configure(api_key=api_key)
-        self.model = genai.GenerativeModel('gemini-1.5-flash-latest')
+
+        try:
+            self.model = genai.GenerativeModel(model_name)
+            logger.info(f"GeminiClient инициализирован с моделью: {model_name}")
+        except Exception as e:
+            logger.warning(f"Не удалось инициализировать модель {model_name}, пробую fallback на gemini-1.5-pro. Ошибка: {e}")
+            self.model = genai.GenerativeModel("gemini-1.5-pro")
+            logger.info("GeminiClient инициализирован с моделью: gemini-1.5-pro")
+
         self._session: dict[SessionId, genai.ChatSession] = {}
-        logger.info("GeminiClient инициализирован.")
 
     @log_error
     async def generate_single(self, prompt: Prompt) -> str:
@@ -88,9 +96,7 @@ class GeminiClient(BaseLLMClient):
 
     @log_error
     async def end_session(self, session_id: SessionId) -> None:
-        """
-        Завершает/удаляет сессию. Операция идемпотентна.
-        """
+        """Завершает/удаляет сессию. Операция идемпотентна."""
         logger.debug(f"GeminiClient: завершаю сессию {session_id}...")
         if session_id in self._session:
             del self._session[session_id]

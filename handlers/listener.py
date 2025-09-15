@@ -7,7 +7,7 @@ from core.database.postgres_client import AsyncPostgresManager
 from core.database.redis_client import RedisClient
 from core.config.exceptions import ListenerError
 from core.config.logging_config import log_error
-from core.operator import Operator
+from core.operator_messages import Operator
 from core.config.parameters import CONFIG_CACHE_TTL
 
 logger = logging.getLogger(__name__)

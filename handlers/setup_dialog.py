@@ -12,6 +12,8 @@ from core.validation import MamaName
 from core.database.postgres_client import AsyncPostgresManager
 from core.personalities import PersonalityManager
 from core.config.setup_state import SetupMama
+from core.database.redis_client import RedisClient
+from core.config.botmode import BotMode
 from keyboards.setup_kb import (
     get_cancel_keyboard, get_timezone_keyboard,
     get_gender_keyboard
@@ -137,7 +139,7 @@ async def get_child_name(message: types.Message, state: FSMContext) -> None:
 @router.callback_query(SetupMama.getting_child_gender, F.data.startswith("gender_"))
 @log_error
 async def set_gender_and_finish(callback: types.CallbackQuery, state: FSMContext,
-                                db: AsyncPostgresManager, personality_manager: PersonalityManager) -> bool | None:
+                                db: AsyncPostgresManager, personality_manager: PersonalityManager, redis: RedisClient) -> bool | None:
     """ФИНАЛ: Сохраняем ребенка. Получаем характер и завершаем настройку."""
     if (data := await state.get_data()).get('admin_id') != callback.from_user.id:
         return await callback.answer("Настройку ведет другой админ.", show_alert=True)
@@ -158,6 +160,7 @@ async def set_gender_and_finish(callback: types.CallbackQuery, state: FSMContext
         personality_name = chosen_personality.get("name")
         personality_prompt = chosen_personality.get("prompt")
         await db.update_personality_prompt(prompt=personality_prompt, config_id=config_id)
+        await redis.set_mode(config_id, BotMode.PASSIVE.value)
         logger.debug(f"Мне достался характер: **{personality_name}**")
         await callback.message.edit_text(
             f"Настройка завершена! Я буду вашей Мамой.\n"
