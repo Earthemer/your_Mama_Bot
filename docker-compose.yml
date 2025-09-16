@@ -1,0 +1,72 @@
+version: '3.8'
+
+services:
+
+  db:
+    image: postgres:16-alpine
+    restart: always
+    environment:
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_DB: ${DB_NAME}
+    volumes:
+
+      - ./schema.sql:/docker-entrypoint-initdb.d/init.sql
+
+      - postgres_data:/var/lib/postgresql/data
+
+
+
+
+  redis:
+    image: redis:7-alpine
+    restart: always
+
+
+
+  bot:
+    build: .
+    restart: always
+    depends_on:
+      - db
+      - redis
+    environment:
+
+      BOT_TOKEN: ${BOT_TOKEN}
+      GEMINI_API_KEY: ${GEMINI_API_KEY}
+
+
+      DB_HOST: db
+      REDIS_HOST: redis
+
+
+      DB_USER: ${DB_USER}
+      DB_PASSWORD: ${DB_PASSWORD}
+      DB_NAME: ${DB_NAME}
+      DB_PORT: 5432
+
+      LOG_LEVEL: ${LOG_LEVEL}
+
+
+      PASSIVE_MODE_CHANCE: ${PASSIVE_MODE_CHANCE}
+      ONLINE_MODE_REPLY_LIMIT: ${ONLINE_MODE_REPLY_LIMIT}
+      ONLINE_MODE_USER_COOLDOWN_SECONDS: ${ONLINE_MODE_USER_COOLDOWN_SECONDS}
+      ONLINE_MODE_BATCH_THRESHOLD: ${ONLINE_MODE_BATCH_THRESHOLD}
+
+
+      MORNING_GATHERING_HOUR: ${MORNING_GATHERING_HOUR}
+      MORNING_GATHERING_MINUTE: ${MORNING_GATHERING_MINUTE}
+      MORNING_ONLINE_DURATION: ${MORNING_ONLINE_DURATION}
+      DAY_GATHERING_HOUR: ${DAY_GATHERING_HOUR}
+      DAY_GATHERING_MINUTE: ${DAY_GATHERING_MINUTE}
+      DAY_ONLINE_DURATION: ${DAY_ONLINE_DURATION}
+      EVENING_GATHERING_HOUR: ${EVENING_GATHERING_HOUR}
+      EVENING_GATHERING_MINUTE: ${EVENING_GATHERING_MINUTE}
+      EVENING_ONLINE_DURATION: ${EVENING_ONLINE_DURATION}
+      RANDOM_DAY_CHANCE_PERCENT: ${RANDOM_DAY_CHANCE_PERCENT}
+      RANDOM_NIGHT_CHANCE_PERCENT: ${RANDOM_NIGHT_CHANCE_PERCENT}
+      GATHERING_DURATION_MINUTES: ${GATHERING_DURATION_MINUTES}
+
+
+volumes:
+  postgres_data:

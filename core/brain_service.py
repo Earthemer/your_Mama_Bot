@@ -2,6 +2,8 @@ import logging
 
 from aiogram import Bot
 from aiogram.exceptions import TelegramAPIError
+from datetime import datetime
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from core.database.postgres_client import AsyncPostgresManager
 from core.database.redis_client import RedisClient
@@ -35,6 +37,16 @@ class BrainService:
         self.bot = bot
         logger.info("BrainService инициализирован.")
 
+    @staticmethod
+    def _get_current_time(config: dict) -> datetime:
+        """Получает текущее время в правильной таймзоне из конфига."""
+        try:
+            timezone = ZoneInfo(config.get("timezone", "UTC"))
+            return datetime.now(timezone)
+        except ZoneInfoNotFoundError:
+            logger.warning(f"Некорректная таймзона в конфиге: '{config.get('timezone')}'. Использую UTC.")
+            return datetime.now(ZoneInfo("UTC"))
+
     @log_error
     async def start_online_interactions(self, config_id: int, time_of_day):
         """
@@ -45,10 +57,10 @@ class BrainService:
         4. Отправляет текстовый ответ в чат.
         5. Выполняет действие по обновления в БД.
         """
-        logger.debug(f"Начинаю пакетную обработку для config_id={config_id} (контекст: {time_of_day})...")
+        logger.debug(f"Запуск сессии для config_id={config_id} (контекст: {time_of_day})...")
 
         if not (config := await self.db.get_mama_config_by_id(config_id)):
-            raise BrainServiceError(f"Не найден конфиг с id={config_id}. Обработка прервана.")
+            raise BrainServiceError(f"Не найден конфиг с id={config_id}.")
 
         participants = await self.db.get_all_participants_by_config_id(config_id)
         participants_map = {p['user_id']: p for p in participants}
@@ -62,15 +74,20 @@ class BrainService:
             return
 
         child = next((p for p in participants if p['id'] == config.get('child_participant_id')), None)
-        if not child:
-            logger.warning(f"Для config_id={config_id} не назначен 'ребенок'. Логика child_was_active пропускается.")
         child_was_active = any(
-            msg.get('participant_info', {}).get('id') == child['id']
-            for msg in all_messages
+            msg.get('user_id') == child['user_id'] for msg in all_messages
         ) if child else False
 
-        system_prompt = self.prompts.create_session_start_prompt(config, participants, all_messages, time_of_day,
-                                                                 child_was_active)
+        current_time = self._get_current_time(config)
+
+        system_prompt = self.prompts.create_session_start_prompt(
+            config=config,
+            participants=participants,
+            messages=all_messages,
+            time_of_day=time_of_day,
+            child_was_active=child_was_active,
+            current_time=current_time
+        )
 
         llm_response = await self.llm.process_session_start(session_id=config_id,
                                                             system_prompt=system_prompt)
@@ -94,8 +111,16 @@ class BrainService:
         if not (online_messages := await self.redis.get_and_clear_batch(f"online_batch_queue:{config_id}")):
             return
 
+        if not (config := await self.db.get_mama_config_by_id(config_id)):
+            raise BrainServiceError(f"Не найден конфиг с id={config_id} для отправки ответа.")
+
         logger.debug(f"Обнаружен пакет из {len(online_messages)} сообщений. Обрабатываю...")
-        prompt = self.prompts.create_online_prompt(dialog_history=online_messages)
+
+        current_time = self._get_current_time(config)
+        prompt = self.prompts.create_online_prompt(
+            dialog_history=online_messages,
+            current_time=current_time
+        )
 
         llm_response = await self.llm.process_session_message(
             session_id=config_id,
@@ -105,9 +130,6 @@ class BrainService:
         if not llm_response:
             logger.warning(f"LLM не вернул ответ для онлайн-пакета config_id={config_id}")
             return
-
-        if not (config := await self.db.get_mama_config_by_id(config_id)):
-            raise BrainServiceError(f"Не найден конфиг с id={config_id} для отправки ответа.")
 
         await self._send_reply(config['chat_id'], llm_response.text_reply)
 
@@ -122,20 +144,23 @@ class BrainService:
             )
 
     @log_error
-    async def process_single_message_immediately(self, message: dict, config: dict):
-        """Обрабатывает одиночное сообщение в реальном времени (для PASSIVE режима)."""
+    async def process_single_message_immediately(self, message_payload: dict, config: dict):
+        """STATELESS. Обрабатывает одно сообщение в PASSIVE режиме."""
         config_id = config['id']
         logger.debug(f"Обрабатываю одиночное сообщение для config_id={config_id}...")
 
         all_participants = await self.db.get_all_participants_by_config_id(config_id)
-        participants_map = {p['user_id']: p for p in all_participants}
+        current_time = self._get_current_time(config)
 
         prompt = self.prompts.create_single_reply_prompt(
             config=config,
             participants=all_participants,
-            message=message
+            message=message_payload,
+            current_time=current_time
         )
+
         llm_response = await self.llm.process_single(prompt)
+
         if not llm_response:
             logger.error(f"LLM не вернул ответ для stateless-запроса config_id={config_id}")
             return
@@ -143,6 +168,7 @@ class BrainService:
         await self._send_reply(config['chat_id'], llm_response.text_reply)
 
         if llm_response.data_json:
+            participants_map = {p['user_id']: p for p in all_participants}
             await self._execute_db_actions(
                 updates=llm_response.data_json.get('updates', []),
                 new_participants=llm_response.data_json.get('new_participants', []),
@@ -152,11 +178,7 @@ class BrainService:
 
     @log_error
     async def say_goodbye_and_switch_to_passive(self, config_id: int):
-        """
-        Идемпотентно завершает ONLINE сессию.
-        Обрабатывает последний "хвост" сообщений, прощается,
-        завершает сессию в LLM и переключает режим на PASSIVE.
-        """
+        """Идемпотентно завершает ONLINE сессию."""
         current_mode = await self.redis.get_mode(config_id)
         if current_mode != BotMode.ONLINE.value:
             logger.debug(
@@ -174,10 +196,12 @@ class BrainService:
             return
 
         last_messages = await self.redis.get_and_clear_batch(f"online_batch_queue:{config_id}")
+        current_time = self._get_current_time(config)
 
         goodbye_prompt = self.prompts.create_final_reply_prompt(
             config=config,
-            dialog_history=last_messages
+            dialog_history=last_messages,
+            current_time=current_time
         )
 
         llm_response = await self.llm.process_session_message(config_id, goodbye_prompt)
@@ -198,7 +222,7 @@ class BrainService:
         await self.redis.set_mode(config_id, BotMode.PASSIVE.value)
         await self.redis.delete(f"online_replies_count:{config_id}")
 
-        logger.debug(f"Режим для config_id={config_id} переключен на PASSIVE. Сессия завершена.")
+        logger.info(f"Режим для config_id={config_id} переключен на PASSIVE. Сессия завершена.")
 
     @log_error
     async def _send_reply(self, chat_id: int, text: str):
@@ -220,14 +244,15 @@ class BrainService:
             updates: list,
             new_participants: list,
             config_id: int,
-            participants_map: dict[int, dict]
+            participants_map: dict
     ):
-        """Приватный метод ("ActionExecutor"). Применяет изменения к БД."""
+        """Приватный метод для применения изменений к БД."""
         logger.debug(f"Применяю обновления из JSON для config_id={config_id}...")
 
         for user_update in updates:
             user_id = user_update.get('user_id')
-            if not user_id: continue
+            if not user_id:
+                continue
 
             participant = participants_map.get(user_id)
             if not participant:
@@ -253,4 +278,4 @@ class BrainService:
                 gender=new_user.get('suggested_gender', 'unknown')
             )
         logger.debug(
-            f"Применяю {len(updates)} апдейтов и {len(new_participants)} новых участников для config_id={config_id}...")
+            f"Применены {len(updates)} апдейтов и {len(new_participants)} новых участников для config_id={config_id}.")
